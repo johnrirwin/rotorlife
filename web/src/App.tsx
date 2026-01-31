@@ -1,11 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Sidebar, TopBar, FeedList, ItemDetail } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection } from './components';
 import { getItems, getSources, refreshFeeds } from './api';
+import { getSellers, getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
 import { useFilters, useDebounce } from './hooks';
-import type { FeedItem, SourceInfo, SourceType, FilterParams } from './types';
+import type { FeedItem, SourceInfo, FilterParams } from './types';
+import type { EquipmentItem, SellerInfo, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 
 function App() {
-  // State
+  // Section state
+  const [activeSection, setActiveSection] = useState<AppSection>('news');
+
+  // News feed state
   const [items, setItems] = useState<FeedItem[]>([]);
   const [sources, setSources] = useState<SourceInfo[]>([]);
   const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null);
@@ -14,11 +19,28 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
 
+  // Equipment state (for search params only)
+  const [sellers, setSellers] = useState<SellerInfo[]>([]);
+  const [equipmentSearchParams, setEquipmentSearchParams] = useState<EquipmentSearchParams>({});
+
+  // Inventory state
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
+  const [inventoryCategory, setInventoryCategory] = useState<EquipmentCategory | null>(null);
+  const [inventoryCondition, setInventoryCondition] = useState<string | null>(null);
+  const [isInventoryLoading, setIsInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+
+  // Modal state
+  const [showAddInventoryModal, setShowAddInventoryModal] = useState(false);
+  const [selectedEquipmentForInventory, setSelectedEquipmentForInventory] = useState<EquipmentItem | null>(null);
+  const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
+
   // Filters
-  const { filters, updateFilter, toggleSource } = useFilters();
+  const { filters, updateFilter } = useFilters();
   const debouncedQuery = useDebounce(filters.query, 300);
 
-  // Load sources on mount
+  // Load sources and sellers on mount
   useEffect(() => {
     getSources()
       .then(response => {
@@ -26,6 +48,14 @@ function App() {
       })
       .catch(err => {
         console.error('Failed to load sources:', err);
+      });
+
+    getSellers()
+      .then(response => {
+        setSellers(response.sellers);
+      })
+      .catch(err => {
+        console.error('Failed to load sellers:', err);
       });
   }, []);
 
@@ -82,6 +112,36 @@ function App() {
     debouncedQuery,
   ]);
 
+  // Load inventory when section becomes active or filters change
+  useEffect(() => {
+    if (activeSection !== 'inventory') return;
+
+    const loadInventory = async () => {
+      setIsInventoryLoading(true);
+      setInventoryError(null);
+
+      try {
+        const [inventoryResponse, summaryResponse] = await Promise.all([
+          getInventory({
+            category: inventoryCategory || undefined,
+            condition: inventoryCondition as ItemCondition || undefined,
+          }),
+          getInventorySummary(),
+        ]);
+        
+        setInventoryItems(inventoryResponse.items || []);
+        setInventorySummary(summaryResponse);
+      } catch (err) {
+        setInventoryError(err instanceof Error ? err.message : 'Failed to load inventory');
+        setInventoryItems([]);
+      } finally {
+        setIsInventoryLoading(false);
+      }
+    };
+
+    loadInventory();
+  }, [activeSection, inventoryCategory, inventoryCondition]);
+
   // Refresh handler
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -121,28 +181,98 @@ function App() {
     }
   }, [filters.sources, filters.sourceType, filters.sort, debouncedQuery]);
 
-  // Handle source type change
-  const handleSourceTypeChange = useCallback((type: SourceType | 'all') => {
-    updateFilter('sourceType', type);
-    // Clear selected sources when changing type
-    if (type !== 'all' && filters.sources.length > 0) {
-      const validSources = sources
-        .filter(s => s.sourceType === type)
-        .map(s => s.id);
-      const newSelected = filters.sources.filter(id => validSources.includes(id));
-      if (newSelected.length !== filters.sources.length) {
-        updateFilter('sources', []);
-      }
+  // Equipment search handler
+  const handleEquipmentSearchChange = useCallback((params: Partial<EquipmentSearchParams>) => {
+    setEquipmentSearchParams(prev => ({ ...prev, ...params }));
+  }, []);
+
+  // Inventory filter handler
+  const handleInventoryFilterChange = useCallback((category: EquipmentCategory | null, condition: string | null) => {
+    setInventoryCategory(category);
+    setInventoryCondition(condition);
+  }, []);
+
+  // Edit inventory item handler
+  const handleEditInventoryItem = useCallback((item: InventoryItem) => {
+    setEditingInventoryItem(item);
+    setSelectedEquipmentForInventory(null);
+    setShowAddInventoryModal(true);
+  }, []);
+
+  // Delete inventory item handler
+  const handleDeleteInventoryItem = useCallback(async (item: InventoryItem) => {
+    if (!confirm(`Delete "${item.name}" from your inventory?`)) return;
+
+    try {
+      await deleteInventoryItem(item.id);
+      setInventoryItems(prev => prev.filter(i => i.id !== item.id));
+      const summaryResponse = await getInventorySummary();
+      setInventorySummary(summaryResponse);
+    } catch (err) {
+      console.error('Failed to delete inventory item:', err);
     }
-  }, [updateFilter, filters.sources, sources]);
+  }, []);
+
+  // Adjust inventory quantity handler
+  const handleAdjustQuantity = useCallback(async (item: InventoryItem, delta: number) => {
+    const newQuantity = Math.max(0, item.quantity + delta);
+    
+    try {
+      const updated = await updateInventoryItem(item.id, { quantity: newQuantity });
+      setInventoryItems(prev => prev.map(i => i.id === item.id ? updated : i));
+      const summaryResponse = await getInventorySummary();
+      setInventorySummary(summaryResponse);
+    } catch (err) {
+      console.error('Failed to update quantity:', err);
+    }
+  }, []);
+
+  // Submit inventory modal handler
+  const handleInventorySubmit = useCallback(async (params: AddInventoryParams) => {
+    if (editingInventoryItem) {
+      // Update existing item
+      const updated = await updateInventoryItem(editingInventoryItem.id, params);
+      setInventoryItems(prev => prev.map(i => i.id === editingInventoryItem.id ? updated : i));
+    } else if (selectedEquipmentForInventory) {
+      // Add from equipment
+      const newItem = await addEquipmentToInventory(
+        selectedEquipmentForInventory.id,
+        selectedEquipmentForInventory.name,
+        selectedEquipmentForInventory.category,
+        selectedEquipmentForInventory.manufacturer,
+        selectedEquipmentForInventory.price,
+        selectedEquipmentForInventory.seller,
+        selectedEquipmentForInventory.productUrl,
+        selectedEquipmentForInventory.imageUrl,
+        selectedEquipmentForInventory.keySpecs,
+        params.quantity,
+        params.condition,
+        params.notes
+      );
+      setInventoryItems(prev => [...prev, newItem]);
+    } else {
+      // Add new manual item
+      const newItem = await addInventoryItem(params);
+      setInventoryItems(prev => [...prev, newItem]);
+    }
+    
+    const summaryResponse = await getInventorySummary();
+    setInventorySummary(summaryResponse);
+  }, [editingInventoryItem, selectedEquipmentForInventory]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedItem) {
-        setSelectedItem(null);
+      if (e.key === 'Escape') {
+        if (showAddInventoryModal) {
+          setShowAddInventoryModal(false);
+          setSelectedEquipmentForInventory(null);
+          setEditingInventoryItem(null);
+        } else if (selectedItem) {
+          setSelectedItem(null);
+        }
       }
-      if (e.key === '/' && !selectedItem) {
+      if (e.key === '/' && !selectedItem && !showAddInventoryModal) {
         e.preventDefault();
         const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
         searchInput?.focus();
@@ -151,50 +281,95 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedItem]);
+  }, [selectedItem, showAddInventoryModal]);
 
   const sourceMap = new Map(sources.map(s => [s.id, s]));
 
   return (
     <div className="flex h-screen bg-slate-900 text-white overflow-hidden">
-      {/* Sidebar */}
-      <Sidebar
-        sources={sources}
-        selectedSources={filters.sources}
-        sourceType={filters.sourceType}
-        onToggleSource={toggleSource}
-        onSourceTypeChange={handleSourceTypeChange}
-        isLoading={sources.length === 0}
+      {/* Sidebar with section navigation */}
+      <EquipmentSidebar
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+        searchParams={equipmentSearchParams}
+        onSearchChange={handleEquipmentSearchChange}
+        sellers={sellers}
+        inventorySummary={inventorySummary}
+        inventoryCategory={inventoryCategory}
+        inventoryCondition={inventoryCondition}
+        onInventoryFilterChange={handleInventoryFilterChange}
       />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Bar */}
-        <TopBar
-          query={filters.query}
-          onQueryChange={q => updateFilter('query', q)}
-          fromDate={filters.fromDate}
-          toDate={filters.toDate}
-          onFromDateChange={d => updateFilter('fromDate', d)}
-          onToDateChange={d => updateFilter('toDate', d)}
-          sort={filters.sort}
-          onSortChange={s => updateFilter('sort', s)}
-          onRefresh={handleRefresh}
-          isRefreshing={isRefreshing}
-          totalCount={totalCount}
-        />
+        {/* News Section */}
+        {activeSection === 'news' && (
+          <>
+            <TopBar
+              query={filters.query}
+              onQueryChange={q => updateFilter('query', q)}
+              fromDate={filters.fromDate}
+              toDate={filters.toDate}
+              onFromDateChange={d => updateFilter('fromDate', d)}
+              onToDateChange={d => updateFilter('toDate', d)}
+              sort={filters.sort}
+              onSortChange={s => updateFilter('sort', s)}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
+              totalCount={totalCount}
+            />
+            <FeedList
+              items={items}
+              sources={sources}
+              isLoading={isLoading}
+              error={error}
+              onItemClick={setSelectedItem}
+            />
+          </>
+        )}
 
-        {/* Feed List */}
-        <FeedList
-          items={items}
-          sources={sources}
-          isLoading={isLoading}
-          error={error}
-          onItemClick={setSelectedItem}
-        />
+        {/* Shop Section */}
+        {activeSection === 'equipment' && (
+          <ShopSection />
+        )}
+
+        {/* Inventory Section */}
+        {activeSection === 'inventory' && (
+          <>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+              <div>
+                <h1 className="text-xl font-semibold text-white">My Gear</h1>
+                <p className="text-sm text-slate-400">
+                  Track your drone equipment inventory
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedEquipmentForInventory(null);
+                  setEditingInventoryItem(null);
+                  setShowAddInventoryModal(true);
+                }}
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Item
+              </button>
+            </div>
+            <InventoryList
+              items={inventoryItems}
+              isLoading={isInventoryLoading}
+              error={inventoryError}
+              onEdit={handleEditInventoryItem}
+              onDelete={handleDeleteInventoryItem}
+              onAdjustQuantity={handleAdjustQuantity}
+            />
+          </>
+        )}
       </div>
 
-      {/* Item Detail Modal */}
+      {/* Item Detail Modal (News) */}
       {selectedItem && (
         <ItemDetail
           item={selectedItem}
@@ -202,6 +377,19 @@ function App() {
           onClose={() => setSelectedItem(null)}
         />
       )}
+
+      {/* Add/Edit Inventory Modal */}
+      <AddInventoryModal
+        isOpen={showAddInventoryModal}
+        onClose={() => {
+          setShowAddInventoryModal(false);
+          setSelectedEquipmentForInventory(null);
+          setEditingInventoryItem(null);
+        }}
+        onSubmit={handleInventorySubmit}
+        equipmentItem={selectedEquipmentForInventory}
+        editItem={editingInventoryItem}
+      />
     </div>
   );
 }

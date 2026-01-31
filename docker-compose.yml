@@ -1,6 +1,37 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=mcp_drone
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   server:
     build:
       context: .
@@ -11,8 +42,20 @@ services:
       - HTTP_ADDR=:8080
       - LOG_LEVEL=info
       - CACHE_TTL=5m
+      - CACHE_BACKEND=redis
+      - REDIS_ADDR=redis:6379
       - RATE_LIMIT=1s
       - CORS_ORIGIN=http://localhost:3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=mcp_drone
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
@@ -31,6 +74,10 @@ services:
     depends_on:
       - server
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
 
 networks:
   default:

@@ -1,0 +1,454 @@
+package database
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/johnrirwin/mcp-news-feed/internal/models"
+)
+
+// InventoryStore handles inventory database operations
+type InventoryStore struct {
+	db *DB
+}
+
+// NewInventoryStore creates a new inventory store
+func NewInventoryStore(db *DB) *InventoryStore {
+	return &InventoryStore{db: db}
+}
+
+// Add creates a new inventory item
+func (s *InventoryStore) Add(ctx context.Context, params models.AddInventoryParams) (*models.InventoryItem, error) {
+	var purchaseDate *time.Time
+	if params.PurchaseDate != "" {
+		t, err := time.Parse("2006-01-02", params.PurchaseDate)
+		if err == nil {
+			purchaseDate = &t
+		}
+	}
+
+	specs := params.Specs
+	if specs == nil {
+		specs = json.RawMessage(`{}`)
+	}
+
+	quantity := params.Quantity
+	if quantity <= 0 {
+		quantity = 1
+	}
+
+	condition := params.Condition
+	if condition == "" {
+		condition = models.ConditionNew
+	}
+
+	query := `
+		INSERT INTO inventory_items (
+			name, category, manufacturer, quantity, condition, notes,
+			build_id, purchase_price, purchase_date, purchase_seller,
+			product_url, image_url, specs, source_equipment_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		RETURNING id, created_at, updated_at
+	`
+
+	item := &models.InventoryItem{
+		Name:              params.Name,
+		Category:          params.Category,
+		Manufacturer:      params.Manufacturer,
+		Quantity:          quantity,
+		Condition:         condition,
+		Notes:             params.Notes,
+		BuildID:           params.BuildID,
+		PurchasePrice:     params.PurchasePrice,
+		PurchaseDate:      purchaseDate,
+		PurchaseSeller:    params.PurchaseSeller,
+		ProductURL:        params.ProductURL,
+		ImageURL:          params.ImageURL,
+		Specs:             specs,
+		SourceEquipmentID: params.SourceEquipmentID,
+	}
+
+	err := s.db.QueryRowContext(ctx, query,
+		item.Name, item.Category, item.Manufacturer, item.Quantity, item.Condition, item.Notes,
+		nullString(item.BuildID), item.PurchasePrice, purchaseDate, nullString(item.PurchaseSeller),
+		nullString(item.ProductURL), nullString(item.ImageURL), item.Specs, nullString(item.SourceEquipmentID),
+	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert inventory item: %w", err)
+	}
+
+	return item, nil
+}
+
+// Get retrieves an inventory item by ID
+func (s *InventoryStore) Get(ctx context.Context, id string) (*models.InventoryItem, error) {
+	query := `
+		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
+			   build_id, purchase_price, purchase_date, purchase_seller,
+			   product_url, image_url, specs, source_equipment_id, created_at, updated_at
+		FROM inventory_items
+		WHERE id = $1
+	`
+
+	item := &models.InventoryItem{}
+	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID sql.NullString
+	var purchasePrice sql.NullFloat64
+	var purchaseDate sql.NullTime
+
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
+		&item.ID, &item.UserID, &item.Name, &item.Category, &item.Manufacturer,
+		&item.Quantity, &item.Condition, &item.Notes,
+		&buildID, &purchasePrice, &purchaseDate, &purchaseSeller,
+		&productURL, &imageURL, &item.Specs, &sourceEquipmentID,
+		&item.CreatedAt, &item.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inventory item: %w", err)
+	}
+
+	item.BuildID = buildID.String
+	item.PurchaseSeller = purchaseSeller.String
+	item.ProductURL = productURL.String
+	item.ImageURL = imageURL.String
+	item.SourceEquipmentID = sourceEquipmentID.String
+
+	if purchasePrice.Valid {
+		item.PurchasePrice = &purchasePrice.Float64
+	}
+	if purchaseDate.Valid {
+		item.PurchaseDate = &purchaseDate.Time
+	}
+
+	return item, nil
+}
+
+// List retrieves inventory items with optional filtering
+func (s *InventoryStore) List(ctx context.Context, params models.InventoryFilterParams) (*models.InventoryResponse, error) {
+	// Build WHERE clause
+	var conditions []string
+	var args []interface{}
+	argIndex := 1
+
+	if params.Category != "" {
+		conditions = append(conditions, fmt.Sprintf("category = $%d", argIndex))
+		args = append(args, params.Category)
+		argIndex++
+	}
+
+	if params.Condition != "" {
+		conditions = append(conditions, fmt.Sprintf("condition = $%d", argIndex))
+		args = append(args, params.Condition)
+		argIndex++
+	}
+
+	if params.BuildID != "" {
+		conditions = append(conditions, fmt.Sprintf("build_id = $%d", argIndex))
+		args = append(args, params.BuildID)
+		argIndex++
+	}
+
+	if params.Query != "" {
+		conditions = append(conditions, fmt.Sprintf(
+			"(name ILIKE $%d OR manufacturer ILIKE $%d)",
+			argIndex, argIndex,
+		))
+		args = append(args, "%"+params.Query+"%")
+		argIndex++
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	// Count total
+	var totalCount int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inventory_items %s", whereClause)
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, fmt.Errorf("failed to count inventory: %w", err)
+	}
+
+	// Get items
+	limit := params.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := params.Offset
+
+	query := fmt.Sprintf(`
+		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
+			   build_id, purchase_price, purchase_date, purchase_seller,
+			   product_url, image_url, specs, source_equipment_id, created_at, updated_at
+		FROM inventory_items %s
+		ORDER BY created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, whereClause, argIndex, argIndex+1)
+
+	args = append(args, limit, offset)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list inventory: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.InventoryItem, 0)
+	categories := make(map[models.EquipmentCategory]int)
+
+	for rows.Next() {
+		var item models.InventoryItem
+		var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID sql.NullString
+		var purchasePrice sql.NullFloat64
+		var purchaseDate sql.NullTime
+
+		if err := rows.Scan(
+			&item.ID, &item.UserID, &item.Name, &item.Category, &item.Manufacturer,
+			&item.Quantity, &item.Condition, &item.Notes,
+			&buildID, &purchasePrice, &purchaseDate, &purchaseSeller,
+			&productURL, &imageURL, &item.Specs, &sourceEquipmentID,
+			&item.CreatedAt, &item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan inventory item: %w", err)
+		}
+
+		item.BuildID = buildID.String
+		item.PurchaseSeller = purchaseSeller.String
+		item.ProductURL = productURL.String
+		item.ImageURL = imageURL.String
+		item.SourceEquipmentID = sourceEquipmentID.String
+
+		if purchasePrice.Valid {
+			item.PurchasePrice = &purchasePrice.Float64
+		}
+		if purchaseDate.Valid {
+			item.PurchaseDate = &purchaseDate.Time
+		}
+
+		items = append(items, item)
+		categories[item.Category]++
+	}
+
+	return &models.InventoryResponse{
+		Items:      items,
+		TotalCount: totalCount,
+		Categories: categories,
+	}, nil
+}
+
+// Update updates an inventory item
+func (s *InventoryStore) Update(ctx context.Context, params models.UpdateInventoryParams) (*models.InventoryItem, error) {
+	// Build SET clause
+	var sets []string
+	var args []interface{}
+	argIndex := 1
+
+	if params.Name != nil {
+		sets = append(sets, fmt.Sprintf("name = $%d", argIndex))
+		args = append(args, *params.Name)
+		argIndex++
+	}
+
+	if params.Category != nil {
+		sets = append(sets, fmt.Sprintf("category = $%d", argIndex))
+		args = append(args, *params.Category)
+		argIndex++
+	}
+
+	if params.Manufacturer != nil {
+		sets = append(sets, fmt.Sprintf("manufacturer = $%d", argIndex))
+		args = append(args, *params.Manufacturer)
+		argIndex++
+	}
+
+	if params.Quantity != nil {
+		sets = append(sets, fmt.Sprintf("quantity = $%d", argIndex))
+		args = append(args, *params.Quantity)
+		argIndex++
+	}
+
+	if params.Condition != nil {
+		sets = append(sets, fmt.Sprintf("condition = $%d", argIndex))
+		args = append(args, *params.Condition)
+		argIndex++
+	}
+
+	if params.Notes != nil {
+		sets = append(sets, fmt.Sprintf("notes = $%d", argIndex))
+		args = append(args, *params.Notes)
+		argIndex++
+	}
+
+	if params.BuildID != nil {
+		sets = append(sets, fmt.Sprintf("build_id = $%d", argIndex))
+		args = append(args, nullString(*params.BuildID))
+		argIndex++
+	}
+
+	if params.PurchasePrice != nil {
+		sets = append(sets, fmt.Sprintf("purchase_price = $%d", argIndex))
+		args = append(args, *params.PurchasePrice)
+		argIndex++
+	}
+
+	if params.PurchaseDate != nil {
+		sets = append(sets, fmt.Sprintf("purchase_date = $%d", argIndex))
+		var purchaseDate *time.Time
+		if *params.PurchaseDate != "" {
+			t, err := time.Parse("2006-01-02", *params.PurchaseDate)
+			if err == nil {
+				purchaseDate = &t
+			}
+		}
+		args = append(args, purchaseDate)
+		argIndex++
+	}
+
+	if params.PurchaseSeller != nil {
+		sets = append(sets, fmt.Sprintf("purchase_seller = $%d", argIndex))
+		args = append(args, nullString(*params.PurchaseSeller))
+		argIndex++
+	}
+
+	if params.ProductURL != nil {
+		sets = append(sets, fmt.Sprintf("product_url = $%d", argIndex))
+		args = append(args, nullString(*params.ProductURL))
+		argIndex++
+	}
+
+	if params.ImageURL != nil {
+		sets = append(sets, fmt.Sprintf("image_url = $%d", argIndex))
+		args = append(args, nullString(*params.ImageURL))
+		argIndex++
+	}
+
+	if params.Specs != nil {
+		sets = append(sets, fmt.Sprintf("specs = $%d", argIndex))
+		args = append(args, params.Specs)
+		argIndex++
+	}
+
+	if len(sets) == 0 {
+		return s.Get(ctx, params.ID)
+	}
+
+	sets = append(sets, "updated_at = NOW()")
+
+	query := fmt.Sprintf(`
+		UPDATE inventory_items
+		SET %s
+		WHERE id = $%d
+	`, strings.Join(sets, ", "), argIndex)
+
+	args = append(args, params.ID)
+
+	result, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update inventory item: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("inventory item not found: %s", params.ID)
+	}
+
+	return s.Get(ctx, params.ID)
+}
+
+// Delete removes an inventory item
+func (s *InventoryStore) Delete(ctx context.Context, id string) error {
+	query := "DELETE FROM inventory_items WHERE id = $1"
+	result, err := s.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete inventory item: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("inventory item not found: %s", id)
+	}
+
+	return nil
+}
+
+// GetSummary returns a summary of the inventory
+func (s *InventoryStore) GetSummary(ctx context.Context) (*models.InventorySummary, error) {
+	// Get total items and value
+	var totalItems int
+	var totalValue sql.NullFloat64
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*), COALESCE(SUM(purchase_price * quantity), 0)
+		FROM inventory_items
+	`).Scan(&totalItems, &totalValue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inventory summary: %w", err)
+	}
+
+	// Get counts by category
+	byCategory := make(map[models.EquipmentCategory]int)
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT category, COUNT(*)
+		FROM inventory_items
+		GROUP BY category
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get category counts: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var category models.EquipmentCategory
+		var count int
+		if err := rows.Scan(&category, &count); err != nil {
+			continue
+		}
+		byCategory[category] = count
+	}
+
+	// Get counts by condition
+	byCondition := make(map[models.ItemCondition]int)
+
+	rows, err = s.db.QueryContext(ctx, `
+		SELECT condition, COUNT(*)
+		FROM inventory_items
+		GROUP BY condition
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get condition counts: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var condition models.ItemCondition
+		var count int
+		if err := rows.Scan(&condition, &count); err != nil {
+			continue
+		}
+		byCondition[condition] = count
+	}
+
+	return &models.InventorySummary{
+		TotalItems:  totalItems,
+		TotalValue:  totalValue.Float64,
+		ByCategory:  byCategory,
+		ByCondition: byCondition,
+	}, nil
+}
+
+// Helper function for nullable strings
+func nullString(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: s, Valid: true}
+}

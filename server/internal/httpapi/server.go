@@ -5,32 +5,46 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
+	"github.com/johnrirwin/mcp-news-feed/internal/equipment"
+	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
 	"github.com/johnrirwin/mcp-news-feed/internal/logging"
 	"github.com/johnrirwin/mcp-news-feed/internal/models"
 )
 
 type Server struct {
-	agg    *aggregator.Aggregator
-	logger *logging.Logger
-	server *http.Server
+	agg          *aggregator.Aggregator
+	equipmentSvc *equipment.Service
+	inventorySvc inventory.InventoryManager
+	logger       *logging.Logger
+	server       *http.Server
 }
 
-func New(agg *aggregator.Aggregator, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, logger *logging.Logger) *Server {
 	return &Server{
-		agg:    agg,
-		logger: logger,
+		agg:          agg,
+		equipmentSvc: equipmentSvc,
+		inventorySvc: inventorySvc,
+		logger:       logger,
 	}
 }
 
 func (s *Server) Start(addr string) error {
 	mux := http.NewServeMux()
 
+	// News feed routes
 	mux.HandleFunc("/api/items", s.corsMiddleware(s.handleGetItems))
 	mux.HandleFunc("/api/sources", s.corsMiddleware(s.handleGetSources))
 	mux.HandleFunc("/api/refresh", s.corsMiddleware(s.handleRefresh))
+
+	// Equipment and inventory routes
+	equipmentAPI := NewEquipmentAPI(s.equipmentSvc, s.inventorySvc, s.logger)
+	equipmentAPI.RegisterRoutes(mux, s.corsMiddleware)
+
+	// Health check
 	mux.HandleFunc("/health", s.handleHealth)
 
 	s.server = &http.Server{
@@ -88,12 +102,22 @@ func (s *Server) handleGetItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse sources (comma-separated)
+	var sources []string
+	if s := query.Get("sources"); s != "" {
+		sources = strings.Split(s, ",")
+	}
+
 	params := models.FilterParams{
-		Limit:  limit,
-		Offset: offset,
-		Source: query.Get("source"),
-		Tag:    query.Get("tag"),
-		Search: query.Get("search"),
+		Limit:      limit,
+		Offset:     offset,
+		Sources:    sources,
+		SourceType: query.Get("sourceType"),
+		Query:      query.Get("q"),
+		Sort:       query.Get("sort"),
+		FromDate:   query.Get("fromDate"),
+		ToDate:     query.Get("toDate"),
+		Tag:        query.Get("tag"),
 	}
 
 	response := s.agg.GetItems(params)
