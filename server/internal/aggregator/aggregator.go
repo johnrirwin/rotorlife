@@ -16,14 +16,14 @@ import (
 
 type Aggregator struct {
 	fetchers []sources.Fetcher
-	cache    *cache.Cache
+	cache    cache.Cache
 	tagger   *tagging.Tagger
 	logger   *logging.Logger
 	mu       sync.RWMutex
 	items    []models.FeedItem
 }
 
-func New(fetchers []sources.Fetcher, c *cache.Cache, tagger *tagging.Tagger, logger *logging.Logger) *Aggregator {
+func New(fetchers []sources.Fetcher, c cache.Cache, tagger *tagging.Tagger, logger *logging.Logger) *Aggregator {
 	return &Aggregator{
 		fetchers: fetchers,
 		cache:    c,

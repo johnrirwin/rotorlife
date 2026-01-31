@@ -5,20 +5,22 @@ import (
 	"time"
 )
 
-type entry struct {
-	value     interface{}
-	expiresAt time.Time
-}
-
-type Cache struct {
+// MemoryCache is an in-memory cache implementation with TTL support
+type MemoryCache struct {
 	mu     sync.RWMutex
 	items  map[string]entry
 	ttl    time.Duration
 	stopCh chan struct{}
 }
 
-func New(ttl time.Duration) *Cache {
-	c := &Cache{
+type entry struct {
+	value     interface{}
+	expiresAt time.Time
+}
+
+// NewMemory creates a new in-memory cache with the specified TTL
+func NewMemory(ttl time.Duration) *MemoryCache {
+	c := &MemoryCache{
 		items:  make(map[string]entry),
 		ttl:    ttl,
 		stopCh: make(chan struct{}),
@@ -27,7 +29,12 @@ func New(ttl time.Duration) *Cache {
 	return c
 }
 
-func (c *Cache) Get(key string) (interface{}, bool) {
+// New creates a new in-memory cache (alias for NewMemory for backwards compatibility)
+func New(ttl time.Duration) *MemoryCache {
+	return NewMemory(ttl)
+}
+
+func (c *MemoryCache) Get(key string) (interface{}, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -41,7 +48,7 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 	return e.value, true
 }
 
-func (c *Cache) Set(key string, value interface{}) {
+func (c *MemoryCache) Set(key string, value interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -51,7 +58,7 @@ func (c *Cache) Set(key string, value interface{}) {
 	}
 }
 
-func (c *Cache) SetWithTTL(key string, value interface{}, ttl time.Duration) {
+func (c *MemoryCache) SetWithTTL(key string, value interface{}, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -61,27 +68,27 @@ func (c *Cache) SetWithTTL(key string, value interface{}, ttl time.Duration) {
 	}
 }
 
-func (c *Cache) Delete(key string) {
+func (c *MemoryCache) Delete(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.items, key)
 }
 
-func (c *Cache) Invalidate(key string) {
+func (c *MemoryCache) Invalidate(key string) {
 	c.Delete(key)
 }
 
-func (c *Cache) Clear() {
+func (c *MemoryCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.items = make(map[string]entry)
 }
 
-func (c *Cache) Stop() {
+func (c *MemoryCache) Stop() {
 	close(c.stopCh)
 }
 
-func (c *Cache) cleanup() {
+func (c *MemoryCache) cleanup() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -95,7 +102,7 @@ func (c *Cache) cleanup() {
 	}
 }
 
-func (c *Cache) removeExpired() {
+func (c *MemoryCache) removeExpired() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -106,3 +113,6 @@ func (c *Cache) removeExpired() {
 		}
 	}
 }
+
+// Ensure MemoryCache implements Cache interface
+var _ Cache = (*MemoryCache)(nil)

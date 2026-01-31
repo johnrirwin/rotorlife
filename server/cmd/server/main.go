@@ -22,10 +22,13 @@ func main() {
 	httpAddr := flag.String("http", ":8080", "HTTP server address")
 	mcpMode := flag.Bool("mcp", false, "Run in MCP stdio mode")
 	cacheTTL := flag.Duration("cache-ttl", 5*time.Minute, "Cache TTL for feed items")
+	cacheBackend := flag.String("cache-backend", "memory", "Cache backend: memory or redis")
+	redisAddr := flag.String("redis-addr", "localhost:6379", "Redis server address")
 	rateLimitDur := flag.Duration("rate-limit", time.Second, "Minimum delay between requests to same host")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	flag.Parse()
 
+	// Environment variable overrides
 	if v := os.Getenv("HTTP_ADDR"); v != "" {
 		*httpAddr = v
 	}
@@ -36,6 +39,12 @@ func main() {
 		if d, err := time.ParseDuration(v); err == nil {
 			*cacheTTL = d
 		}
+	}
+	if v := os.Getenv("CACHE_BACKEND"); v != "" {
+		*cacheBackend = v
+	}
+	if v := os.Getenv("REDIS_ADDR"); v != "" {
+		*redisAddr = v
 	}
 	if v := os.Getenv("RATE_LIMIT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
@@ -57,7 +66,26 @@ func main() {
 	}
 	logger := logging.New(level)
 
-	feedCache := cache.New(*cacheTTL)
+	// Initialize cache backend
+	var feedCache cache.Cache
+	switch *cacheBackend {
+	case "redis":
+		logger.Info("Using Redis cache backend", logging.WithField("addr", *redisAddr))
+		redisCache, err := cache.NewRedis(cache.RedisConfig{
+			Addr:   *redisAddr,
+			Prefix: "mcp-news:",
+		}, *cacheTTL)
+		if err != nil {
+			logger.Error("Failed to connect to Redis, falling back to memory cache", logging.WithField("error", err.Error()))
+			feedCache = cache.NewMemory(*cacheTTL)
+		} else {
+			feedCache = redisCache
+		}
+	default:
+		logger.Info("Using in-memory cache backend")
+		feedCache = cache.NewMemory(*cacheTTL)
+	}
+
 	limiter := ratelimit.New(*rateLimitDur)
 	tagger := tagging.New()
 
