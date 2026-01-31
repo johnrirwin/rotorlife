@@ -37,6 +37,7 @@ type DatabaseConfig struct {
 	User     string
 	Password string
 	Database string
+	SSLMode  string
 }
 
 // LoggingConfig holds logging configuration
@@ -46,15 +47,15 @@ type LoggingConfig struct {
 
 // AuthConfig holds authentication configuration
 type AuthConfig struct {
-	JWTSecret        string
-	JWTIssuer        string
-	JWTAudience      string
-	AccessTokenTTL   time.Duration
-	RefreshTokenTTL  time.Duration
-	GoogleClientID   string
+	JWTSecret          string
+	JWTIssuer          string
+	JWTAudience        string
+	AccessTokenTTL     time.Duration
+	RefreshTokenTTL    time.Duration
+	GoogleClientID     string
 	GoogleClientSecret string
 	GoogleRedirectURI  string
-	EnableAdminTools bool
+	EnableAdminTools   bool
 }
 
 // Load parses flags and environment variables to build configuration
@@ -74,11 +75,12 @@ func Load() *Config {
 	dbUser := flag.String("db-user", "postgres", "PostgreSQL user")
 	dbPassword := flag.String("db-password", "postgres", "PostgreSQL password")
 	dbName := flag.String("db-name", "drone_inventory", "PostgreSQL database name")
+	dbSSLMode := flag.String("db-sslmode", "disable", "PostgreSQL SSL mode")
 
 	flag.Parse()
 
 	// Apply environment variable overrides
-	applyEnvOverrides(httpAddr, mcpMode, cacheTTL, cacheBackend, redisAddr, rateLimitDur, logLevel, dbHost, dbPort, dbUser, dbPassword, dbName)
+	applyEnvOverrides(httpAddr, mcpMode, cacheTTL, cacheBackend, redisAddr, rateLimitDur, logLevel, dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode)
 
 	// Build config struct
 	cfg.Server = ServerConfig{
@@ -99,6 +101,7 @@ func Load() *Config {
 		User:     *dbUser,
 		Password: *dbPassword,
 		Database: *dbName,
+		SSLMode:  *dbSSLMode,
 	}
 
 	cfg.Logging = LoggingConfig{
@@ -159,6 +162,7 @@ func applyEnvOverrides(
 	dbUser *string,
 	dbPassword *string,
 	dbName *string,
+	dbSSLMode *string,
 ) {
 	if v := os.Getenv("HTTP_ADDR"); v != "" {
 		*httpAddr = v
@@ -201,5 +205,8 @@ func applyEnvOverrides(
 	}
 	if v := os.Getenv("DB_NAME"); v != "" {
 		*dbName = v
+	}
+	if v := os.Getenv("DB_SSLMODE"); v != "" {
+		*dbSSLMode = v
 	}
 }

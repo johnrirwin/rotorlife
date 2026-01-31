@@ -150,6 +150,7 @@ func (a *App) initDatabaseServices() {
 		User:     a.Config.Database.User,
 		Password: a.Config.Database.Password,
 		Database: a.Config.Database.Database,
+		SSLMode:  a.Config.Database.SSLMode,
 	}
 
 	db, err := database.New(dbConfig)

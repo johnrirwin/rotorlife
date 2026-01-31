@@ -51,6 +51,10 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=mcp_drone
+      - DB_SSLMODE=disable
+      - AUTH_JWT_SECRET=dev-secret-change-in-production
+      - AUTH_JWT_ISSUER=mcp-news-feed
+      - AUTH_JWT_AUDIENCE=mcp-news-feed-users
     depends_on:
       postgres:
         condition: service_healthy

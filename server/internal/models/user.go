@@ -94,11 +94,11 @@ type GoogleClaims struct {
 
 // CreateUserParams represents parameters for creating a user
 type CreateUserParams struct {
-	Email        string     `json:"email"`
-	Password     string     `json:"password,omitempty"`
-	DisplayName  string     `json:"displayName"`
-	AvatarURL    string     `json:"avatarUrl,omitempty"`
-	Status       UserStatus `json:"status,omitempty"`
+	Email       string     `json:"email"`
+	Password    string     `json:"password,omitempty"`
+	DisplayName string     `json:"displayName"`
+	AvatarURL   string     `json:"avatarUrl,omitempty"`
+	Status      UserStatus `json:"status,omitempty"`
 }
 
 // UpdateUserParams represents parameters for updating a user
@@ -125,10 +125,10 @@ type UsersResponse struct {
 
 // RefreshToken represents a stored refresh token
 type RefreshToken struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"userId"`
-	TokenHash string    `json:"-"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        string     `json:"id"`
+	UserID    string     `json:"userId"`
+	TokenHash string     `json:"-"`
+	ExpiresAt time.Time  `json:"expiresAt"`
+	CreatedAt time.Time  `json:"createdAt"`
 	RevokedAt *time.Time `json:"revokedAt,omitempty"`
 }
