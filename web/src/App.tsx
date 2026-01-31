@@ -305,37 +305,6 @@ function App() {
 
   return (
     <div className="flex h-screen bg-slate-900 text-white overflow-hidden">
-      {/* User menu in top-right corner */}
-      <div className="absolute top-4 right-4 z-40">
-        {authLoading ? (
-          <div className="text-gray-400 text-sm">Loading...</div>
-        ) : isAuthenticated && user ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-300">{user.displayName || user.email}</span>
-            {user.avatarUrl && (
-              <img
-                src={user.avatarUrl}
-                alt={user.displayName || 'User'}
-                className="w-8 h-8 rounded-full"
-              />
-            )}
-            <button
-              onClick={logout}
-              className="text-sm text-gray-400 hover:text-white transition-colors"
-            >
-              Sign Out
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setAuthModal('login')}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Sign In
-          </button>
-        )}
-      </div>
-
       {/* Sidebar with section navigation */}
       <EquipmentSidebar
         activeSection={activeSection}
@@ -347,6 +316,11 @@ function App() {
         inventoryCategory={inventoryCategory}
         inventoryCondition={inventoryCondition}
         onInventoryFilterChange={handleInventoryFilterChange}
+        isAuthenticated={isAuthenticated}
+        user={user}
+        authLoading={authLoading}
+        onSignIn={() => setAuthModal('login')}
+        onSignOut={logout}
       />
 
       {/* Main Content */}
