@@ -1,0 +1,173 @@
+package database
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"time"
+
+	_ "github.com/lib/pq"
+)
+
+// Config holds database configuration
+type Config struct {
+	Host            string
+	Port            int
+	User            string
+	Password        string
+	Database        string
+	SSLMode         string
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+}
+
+// DefaultConfig returns sensible defaults
+func DefaultConfig() Config {
+	return Config{
+		Host:            "localhost",
+		Port:            5432,
+		User:            "postgres",
+		Password:        "postgres",
+		Database:        "mcp_drone",
+		SSLMode:         "disable",
+		MaxOpenConns:    25,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: 5 * time.Minute,
+	}
+}
+
+// DB wraps the sql.DB connection
+type DB struct {
+	*sql.DB
+	config Config
+}
+
+// New creates a new database connection
+func New(config Config) (*DB, error) {
+	dsn := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		config.Host, config.Port, config.User, config.Password, config.Database, config.SSLMode,
+	)
+
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	db.SetMaxOpenConns(config.MaxOpenConns)
+	db.SetMaxIdleConns(config.MaxIdleConns)
+	db.SetConnMaxLifetime(config.ConnMaxLifetime)
+
+	// Test connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return &DB{DB: db, config: config}, nil
+}
+
+// Close closes the database connection
+func (db *DB) Close() error {
+	return db.DB.Close()
+}
+
+// Migrate runs database migrations
+func (db *DB) Migrate(ctx context.Context) error {
+	migrations := []string{
+		migrationSellers,
+		migrationEquipmentItems,
+		migrationInventoryItems,
+		migrationIndexes,
+	}
+
+	for i, migration := range migrations {
+		if _, err := db.ExecContext(ctx, migration); err != nil {
+			return fmt.Errorf("migration %d failed: %w", i+1, err)
+		}
+	}
+
+	return nil
+}
+
+// Migration SQL statements
+const migrationSellers = `
+CREATE TABLE IF NOT EXISTS sellers (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    url VARCHAR(512) NOT NULL,
+    description TEXT,
+    logo_url VARCHAR(512),
+    categories JSONB DEFAULT '[]',
+    enabled BOOLEAN DEFAULT true,
+    region VARCHAR(10),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+`
+
+const migrationEquipmentItems = `
+CREATE TABLE IF NOT EXISTS equipment_items (
+    id VARCHAR(100) PRIMARY KEY,
+    name VARCHAR(512) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    manufacturer VARCHAR(255),
+    price DECIMAL(10,2),
+    currency VARCHAR(10) DEFAULT 'USD',
+    seller_id VARCHAR(50) REFERENCES sellers(id),
+    seller_name VARCHAR(255) NOT NULL,
+    product_url VARCHAR(1024) NOT NULL,
+    image_url VARCHAR(1024),
+    key_specs JSONB DEFAULT '{}',
+    in_stock BOOLEAN DEFAULT false,
+    stock_qty INTEGER,
+    sku VARCHAR(100),
+    description TEXT,
+    rating DECIMAL(3,2),
+    review_count INTEGER,
+    last_checked TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+`
+
+const migrationInventoryItems = `
+CREATE TABLE IF NOT EXISTS inventory_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id VARCHAR(100) DEFAULT 'default',
+    name VARCHAR(512) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    manufacturer VARCHAR(255),
+    quantity INTEGER NOT NULL DEFAULT 1,
+    condition VARCHAR(20) NOT NULL DEFAULT 'new',
+    notes TEXT,
+    build_id VARCHAR(100),
+    purchase_price DECIMAL(10,2),
+    purchase_date DATE,
+    purchase_seller VARCHAR(255),
+    product_url VARCHAR(1024),
+    image_url VARCHAR(1024),
+    specs JSONB DEFAULT '{}',
+    source_equipment_id VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+`
+
+const migrationIndexes = `
+CREATE INDEX IF NOT EXISTS idx_equipment_category ON equipment_items(category);
+CREATE INDEX IF NOT EXISTS idx_equipment_seller ON equipment_items(seller_id);
+CREATE INDEX IF NOT EXISTS idx_equipment_manufacturer ON equipment_items(manufacturer);
+CREATE INDEX IF NOT EXISTS idx_equipment_price ON equipment_items(price);
+CREATE INDEX IF NOT EXISTS idx_equipment_in_stock ON equipment_items(in_stock);
+CREATE INDEX IF NOT EXISTS idx_equipment_name_search ON equipment_items USING gin(to_tsvector('english', name));
+
+CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory_items(category);
+CREATE INDEX IF NOT EXISTS idx_inventory_condition ON inventory_items(condition);
+CREATE INDEX IF NOT EXISTS idx_inventory_build ON inventory_items(build_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_name_search ON inventory_items USING gin(to_tsvector('english', name));
+`

@@ -10,10 +10,14 @@ import (
 
 	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
 	"github.com/johnrirwin/mcp-news-feed/internal/cache"
+	"github.com/johnrirwin/mcp-news-feed/internal/database"
+	"github.com/johnrirwin/mcp-news-feed/internal/equipment"
 	"github.com/johnrirwin/mcp-news-feed/internal/httpapi"
+	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
 	"github.com/johnrirwin/mcp-news-feed/internal/logging"
 	"github.com/johnrirwin/mcp-news-feed/internal/mcp"
 	"github.com/johnrirwin/mcp-news-feed/internal/ratelimit"
+	"github.com/johnrirwin/mcp-news-feed/internal/sellers"
 	"github.com/johnrirwin/mcp-news-feed/internal/sources"
 	"github.com/johnrirwin/mcp-news-feed/internal/tagging"
 )
@@ -26,6 +30,11 @@ func main() {
 	redisAddr := flag.String("redis-addr", "localhost:6379", "Redis server address")
 	rateLimitDur := flag.Duration("rate-limit", time.Second, "Minimum delay between requests to same host")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+	dbHost := flag.String("db-host", "localhost", "PostgreSQL host")
+	dbPort := flag.Int("db-port", 5432, "PostgreSQL port")
+	dbUser := flag.String("db-user", "postgres", "PostgreSQL user")
+	dbPassword := flag.String("db-password", "postgres", "PostgreSQL password")
+	dbName := flag.String("db-name", "drone_inventory", "PostgreSQL database name")
 	flag.Parse()
 
 	// Environment variable overrides
@@ -53,6 +62,18 @@ func main() {
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		*logLevel = v
+	}
+	if v := os.Getenv("DB_HOST"); v != "" {
+		*dbHost = v
+	}
+	if v := os.Getenv("DB_USER"); v != "" {
+		*dbUser = v
+	}
+	if v := os.Getenv("DB_PASSWORD"); v != "" {
+		*dbPassword = v
+	}
+	if v := os.Getenv("DB_NAME"); v != "" {
+		*dbName = v
 	}
 
 	level := logging.LevelInfo
@@ -96,6 +117,42 @@ func main() {
 
 	agg := aggregator.New(fetchers, feedCache, tagger, logger)
 
+	// Initialize seller registry with adapters
+	sellerRegistry := sellers.NewRegistry()
+	sellerRegistry.Register(sellers.NewRaceDayQuads(limiter, feedCache))
+	sellerRegistry.Register(sellers.NewGetFPV(limiter, feedCache))
+	logger.Info("Registered seller adapters", logging.WithField("count", len(sellerRegistry.List())))
+
+	// Initialize equipment service
+	equipmentSvc := equipment.NewService(sellerRegistry, feedCache, logger)
+
+	// Initialize inventory service (in-memory for now, can upgrade to PostgreSQL)
+	var inventorySvc inventory.InventoryManager
+
+	// Try to connect to PostgreSQL for inventory persistence
+	dbConfig := database.Config{
+		Host:     *dbHost,
+		Port:     *dbPort,
+		User:     *dbUser,
+		Password: *dbPassword,
+		Database: *dbName,
+	}
+
+	db, err := database.New(dbConfig)
+	if err != nil {
+		logger.Warn("Failed to connect to PostgreSQL, using in-memory inventory", logging.WithField("error", err.Error()))
+		inventorySvc = inventory.NewInMemoryService(logger)
+	} else {
+		logger.Info("Connected to PostgreSQL for inventory persistence")
+		if err := db.Migrate(context.Background()); err != nil {
+			logger.Warn("Failed to run migrations, using in-memory inventory", logging.WithField("error", err.Error()))
+			inventorySvc = inventory.NewInMemoryService(logger)
+		} else {
+			inventoryStore := database.NewInventoryStore(db)
+			inventorySvc = inventory.NewService(inventoryStore, logger)
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -109,7 +166,7 @@ func main() {
 
 	if *mcpMode {
 		logger.Info("Starting MCP server in stdio mode")
-		mcpHandler := mcp.NewHandler(agg, logger)
+		mcpHandler := mcp.NewHandler(agg, equipmentSvc, inventorySvc, logger)
 		mcpServer := mcp.NewServer(mcpHandler, logger)
 
 		logger.Info("Pre-fetching feeds...")
@@ -124,7 +181,7 @@ func main() {
 	} else {
 		logger.Info("Starting HTTP server", logging.WithField("addr", *httpAddr))
 
-		httpServer := httpapi.New(agg, logger)
+		httpServer := httpapi.New(agg, equipmentSvc, inventorySvc, logger)
 
 		go func() {
 			logger.Info("Pre-fetching feeds in background...")

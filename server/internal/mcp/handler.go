@@ -5,19 +5,25 @@ import (
 	"encoding/json"
 
 	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
+	"github.com/johnrirwin/mcp-news-feed/internal/equipment"
+	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
 	"github.com/johnrirwin/mcp-news-feed/internal/logging"
 	"github.com/johnrirwin/mcp-news-feed/internal/models"
 )
 
 type Handler struct {
-	agg    *aggregator.Aggregator
-	logger *logging.Logger
+	agg          *aggregator.Aggregator
+	equipmentSvc *equipment.Service
+	inventorySvc inventory.InventoryManager
+	logger       *logging.Logger
 }
 
-func NewHandler(agg *aggregator.Aggregator, logger *logging.Logger) *Handler {
+func NewHandler(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, logger *logging.Logger) *Handler {
 	return &Handler{
-		agg:    agg,
-		logger: logger,
+		agg:          agg,
+		equipmentSvc: equipmentSvc,
+		inventorySvc: inventorySvc,
+		logger:       logger,
 	}
 }
 
@@ -27,8 +33,16 @@ type ToolDefinition struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 
+type GetNewsParams struct {
+	Limit   int      `json:"limit"`
+	Sources []string `json:"sources"`
+	Tag     string   `json:"tag"`
+	Query   string   `json:"query"`
+}
+
 func (h *Handler) GetTools() []ToolDefinition {
-	return []ToolDefinition{
+	// Get news tools
+	tools := []ToolDefinition{
 		{
 			Name:        "get_drone_news",
 			Description: "Get the latest drone news and community posts from various sources including news sites, Reddit, and forums.",
@@ -71,16 +85,23 @@ func (h *Handler) GetTools() []ToolDefinition {
 			}`),
 		},
 	}
-}
 
-type GetNewsParams struct {
-	Limit   int      `json:"limit"`
-	Sources []string `json:"sources"`
-	Tag     string   `json:"tag"`
-	Query   string   `json:"query"`
+	// Add equipment/inventory tools
+	equipmentHandler := NewEquipmentHandler(h.equipmentSvc, h.inventorySvc, h.logger)
+	tools = append(tools, equipmentHandler.GetTools()...)
+
+	return tools
 }
 
 func (h *Handler) HandleToolCall(ctx context.Context, name string, arguments json.RawMessage) (interface{}, error) {
+	// Try equipment/inventory tools first
+	equipmentHandler := NewEquipmentHandler(h.equipmentSvc, h.inventorySvc, h.logger)
+	result, err := equipmentHandler.HandleToolCall(ctx, name, arguments)
+	if result != nil || err != nil {
+		return result, err
+	}
+
+	// Handle news tools
 	switch name {
 	case "get_drone_news":
 		return h.handleGetNews(ctx, arguments)

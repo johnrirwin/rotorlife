@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	github.com/PuerkitoBio/goquery v1.9.1
+	github.com/lib/pq v1.11.1
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/redis/go-redis/v9 v9.17.3
 )
