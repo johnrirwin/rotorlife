@@ -180,8 +180,8 @@ export function EquipmentSidebar({
         </div>
       )}
 
-      {/* Spacer to push user section to bottom */}
-      <div className="flex-1" />
+      {/* Spacer to push user section to bottom - only when no inventory filters showing */}
+      {activeSection !== 'inventory' && <div className="flex-1" />}
 
       {/* User section at bottom */}
       <div className="p-4 border-t border-slate-800">

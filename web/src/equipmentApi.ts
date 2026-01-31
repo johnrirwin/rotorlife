@@ -13,13 +13,25 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
+// Get access token from localStorage
+function getAccessToken(): string | null {
+  return localStorage.getItem('access_token');
+}
+
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const token = getAccessToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options?.headers,
+  };
+  
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
