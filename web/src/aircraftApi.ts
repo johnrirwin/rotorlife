@@ -142,7 +142,7 @@ export async function setELRSSettings(
 ): Promise<AircraftELRSSettings> {
   return fetchAPI<AircraftELRSSettings>(`/api/aircraft/${aircraftId}/elrs`, {
     method: 'POST',
-    body: JSON.stringify({ settings: JSON.stringify(params.settings) }),
+    body: JSON.stringify(params),
   });
 }
 

@@ -39,6 +39,7 @@ export function AircraftDetail({
     details.elrsSettings?.settings || {}
   );
   const [isSavingElrs, setIsSavingElrs] = useState(false);
+  const [elrsSaved, setElrsSaved] = useState(false);
 
   const { aircraft, components } = details;
   const aircraftType = AIRCRAFT_TYPES.find(t => t.value === aircraft.type);
@@ -124,9 +125,13 @@ export function AircraftDetail({
   // Handle ELRS settings save
   const handleSaveElrs = async () => {
     setIsSavingElrs(true);
+    setElrsSaved(false);
     try {
       await onSetELRSSettings(elrsSettings);
-      onRefresh();
+      await onRefresh();
+      setElrsSaved(true);
+      // Reset saved state after 2 seconds
+      setTimeout(() => setElrsSaved(false), 2000);
     } catch (err) {
       console.error('Failed to save ELRS settings:', err);
     } finally {
@@ -431,12 +436,19 @@ export function AircraftDetail({
                   <button
                     onClick={handleSaveElrs}
                     disabled={isSavingElrs}
-                    className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-600/50 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                    className={`px-4 py-2 ${elrsSaved ? 'bg-green-600' : 'bg-primary-600 hover:bg-primary-700'} disabled:bg-primary-600/50 text-white font-medium rounded-lg transition-colors flex items-center gap-2`}
                   >
                     {isSavingElrs ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
                         Saving...
+                      </>
+                    ) : elrsSaved ? (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Saved!
                       </>
                     ) : (
                       'Save ELRS Settings'
