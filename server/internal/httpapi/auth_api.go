@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/johnrirwin/rotorlife/internal/auth"
 	"github.com/johnrirwin/rotorlife/internal/logging"
@@ -30,6 +32,7 @@ func (api *AuthAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.
 	mux.HandleFunc("/api/auth/signup", corsMiddleware(api.handleSignup))
 	mux.HandleFunc("/api/auth/login", corsMiddleware(api.handleLogin))
 	mux.HandleFunc("/api/auth/google", corsMiddleware(api.handleGoogleLogin))
+	mux.HandleFunc("/api/auth/google/callback", api.handleGoogleCallback)
 	mux.HandleFunc("/api/auth/refresh", corsMiddleware(api.handleRefresh))
 	mux.HandleFunc("/api/auth/logout", corsMiddleware(api.authMiddleware.RequireAuth(api.handleLogout)))
 	mux.HandleFunc("/api/auth/me", corsMiddleware(api.authMiddleware.RequireAuth(api.handleGetMe)))
@@ -204,6 +207,55 @@ func (api *AuthAPI) handleGetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	api.writeJSON(w, http.StatusOK, user)
+}
+
+func (api *AuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	errorParam := r.URL.Query().Get("error")
+
+	// Frontend URL to redirect to
+	frontendURL := "http://localhost:3000"
+
+	if errorParam != "" {
+		errorDesc := r.URL.Query().Get("error_description")
+		redirectURL := fmt.Sprintf("%s/login?error=%s&error_description=%s",
+			frontendURL,
+			url.QueryEscape(errorParam),
+			url.QueryEscape(errorDesc))
+		http.Redirect(w, r, redirectURL, http.StatusFound)
+		return
+	}
+
+	if code == "" {
+		redirectURL := fmt.Sprintf("%s/login?error=missing_code", frontendURL)
+		http.Redirect(w, r, redirectURL, http.StatusFound)
+		return
+	}
+
+	// Exchange code for tokens and authenticate user
+	response, err := api.authService.LoginWithGoogle(r.Context(), models.GoogleLoginParams{
+		Code: code,
+	})
+	if err != nil {
+		api.logger.Error("Google callback failed", logging.WithField("error", err.Error()))
+		redirectURL := fmt.Sprintf("%s/login?error=auth_failed&error_description=%s",
+			frontendURL,
+			url.QueryEscape(err.Error()))
+		http.Redirect(w, r, redirectURL, http.StatusFound)
+		return
+	}
+
+	// Redirect to frontend with tokens in URL fragment (more secure than query params)
+	redirectURL := fmt.Sprintf("%s/auth/callback#access_token=%s&refresh_token=%s",
+		frontendURL,
+		url.QueryEscape(response.Tokens.AccessToken),
+		url.QueryEscape(response.Tokens.RefreshToken))
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 func (api *AuthAPI) writeJSON(w http.ResponseWriter, status int, data interface{}) {

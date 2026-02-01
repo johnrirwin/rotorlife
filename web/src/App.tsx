@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
@@ -14,9 +14,17 @@ import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAir
 type AuthModal = 'none' | 'login' | 'signup';
 
 function App() {
+  // Check if this is the OAuth callback
+  const isAuthCallback = window.location.pathname === '/auth/callback';
+  
   // Auth state
   const { isAuthenticated, user, logout, isLoading: authLoading } = useAuth();
   const [authModal, setAuthModal] = useState<AuthModal>('none');
+
+  // Handle OAuth callback
+  if (isAuthCallback) {
+    return <AuthCallback />;
+  }
 
   // Section state
   const [activeSection, setActiveSection] = useState<AppSection>('news');

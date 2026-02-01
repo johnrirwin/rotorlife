@@ -16,3 +16,6 @@ export { AircraftCard } from './AircraftCard';
 export { AircraftList } from './AircraftList';
 export { AircraftForm } from './AircraftForm';
 export { AircraftDetail } from './AircraftDetail';
+
+// Auth components
+export { AuthCallback } from './AuthCallback';
