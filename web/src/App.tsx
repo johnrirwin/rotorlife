@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
@@ -21,7 +21,10 @@ function App() {
   const { isAuthenticated, user, logout, isLoading: authLoading } = useAuth();
   const [authModal, setAuthModal] = useState<AuthModal>('none');
 
-  // Section state
+  // Track previous auth state to detect logout
+  const [wasAuthenticated, setWasAuthenticated] = useState<boolean | null>(null);
+
+  // Section state - starts as 'news' but will be set based on auth
   const [activeSection, setActiveSection] = useState<AppSection>('news');
 
   // News feed state
@@ -61,6 +64,33 @@ function App() {
   // Filters
   const { filters, updateFilter } = useFilters();
   const debouncedQuery = useDebounce(filters.query, 300);
+
+  // Handle auth state changes for routing
+  useEffect(() => {
+    if (authLoading) return;
+    
+    // On initial load after auth check completes
+    if (wasAuthenticated === null) {
+      setWasAuthenticated(isAuthenticated);
+      // Set initial section based on auth state
+      if (isAuthenticated) {
+        setActiveSection('dashboard');
+      }
+      return;
+    }
+    
+    // Detect logout: was authenticated, now not
+    if (wasAuthenticated && !isAuthenticated) {
+      setActiveSection('news');
+    }
+    
+    // Detect login: was not authenticated, now is
+    if (!wasAuthenticated && isAuthenticated) {
+      setActiveSection('dashboard');
+    }
+    
+    setWasAuthenticated(isAuthenticated);
+  }, [isAuthenticated, authLoading, wasAuthenticated]);
 
   // Load sources and sellers on mount
   useEffect(() => {
@@ -134,9 +164,10 @@ function App() {
     debouncedQuery,
   ]);
 
-  // Load inventory when section becomes active or filters change
+  // Load inventory when section becomes active or filters change (also for dashboard)
   useEffect(() => {
-    if (activeSection !== 'inventory') return;
+    if (activeSection !== 'inventory' && activeSection !== 'dashboard') return;
+    if (!isAuthenticated) return;
 
     const loadInventory = async () => {
       setIsInventoryLoading(true);
@@ -145,8 +176,8 @@ function App() {
       try {
         const [inventoryResponse, summaryResponse] = await Promise.all([
           getInventory({
-            category: inventoryCategory || undefined,
-            condition: inventoryCondition as ItemCondition || undefined,
+            category: activeSection === 'inventory' ? (inventoryCategory || undefined) : undefined,
+            condition: activeSection === 'inventory' ? (inventoryCondition as ItemCondition || undefined) : undefined,
           }),
           getInventorySummary(),
         ]);
@@ -162,11 +193,12 @@ function App() {
     };
 
     loadInventory();
-  }, [activeSection, inventoryCategory, inventoryCondition]);
+  }, [activeSection, inventoryCategory, inventoryCondition, isAuthenticated]);
 
-  // Load aircraft when section becomes active
+  // Load aircraft when section becomes active (also for dashboard)
   useEffect(() => {
-    if (activeSection !== 'aircraft') return;
+    if (activeSection !== 'aircraft' && activeSection !== 'dashboard') return;
+    if (!isAuthenticated) return;
 
     const loadAircraft = async () => {
       setIsAircraftLoading(true);
@@ -184,7 +216,7 @@ function App() {
     };
 
     loadAircraft();
-  }, [activeSection]);
+  }, [activeSection, isAuthenticated]);
 
   // Refresh handler
   const handleRefresh = useCallback(async () => {
@@ -383,14 +415,21 @@ function App() {
 
   const sourceMap = new Map(sources.map(s => [s.id, s]));
 
-  // Handle section change with auth check for inventory and aircraft
+  // Handle section change with auth check for protected sections
   const handleSectionChange = useCallback((section: AppSection) => {
-    if ((section === 'inventory' || section === 'aircraft') && !isAuthenticated) {
+    // Dashboard, inventory, and aircraft require authentication
+    if ((section === 'dashboard' || section === 'inventory' || section === 'aircraft') && !isAuthenticated) {
       setAuthModal('login');
       return;
     }
     setActiveSection(section);
   }, [isAuthenticated]);
+
+  // Handle logout with redirect to news feed
+  const handleLogout = useCallback(async () => {
+    await logout();
+    // Navigation to news is handled by the auth state change effect
+  }, [logout]);
 
   // Handle OAuth callback - must be after all hooks are called
   if (isAuthCallback) {
@@ -414,11 +453,36 @@ function App() {
         user={user}
         authLoading={authLoading}
         onSignIn={() => setAuthModal('login')}
-        onSignOut={logout}
+        onSignOut={handleLogout}
       />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Dashboard Section - only for authenticated users */}
+        {activeSection === 'dashboard' && isAuthenticated && (
+          <Dashboard
+            recentAircraft={aircraftItems}
+            recentGear={inventoryItems}
+            recentNews={items}
+            sources={sources}
+            isAircraftLoading={isAircraftLoading}
+            isGearLoading={isInventoryLoading}
+            isNewsLoading={isLoading}
+            onViewAllNews={() => setActiveSection('news')}
+            onAddAircraft={() => {
+              setEditingAircraft(null);
+              setShowAircraftForm(true);
+            }}
+            onAddGear={() => {
+              setSelectedEquipmentForInventory(null);
+              setEditingInventoryItem(null);
+              setShowAddInventoryModal(true);
+            }}
+            onSelectAircraft={handleSelectAircraft}
+            onSelectNewsItem={setSelectedItem}
+          />
+        )}
+
         {/* News Section */}
         {activeSection === 'news' && (
           <>

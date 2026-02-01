@@ -1,0 +1,416 @@
+import type { Aircraft } from '../aircraftTypes';
+import type { InventoryItem } from '../equipmentTypes';
+import type { FeedItem, SourceInfo } from '../types';
+
+interface DashboardProps {
+  // Data
+  recentAircraft: Aircraft[];
+  recentGear: InventoryItem[];
+  recentNews: FeedItem[];
+  sources: SourceInfo[];
+  // Loading states
+  isAircraftLoading: boolean;
+  isGearLoading: boolean;
+  isNewsLoading: boolean;
+  // Actions
+  onViewAllNews: () => void;
+  onAddAircraft: () => void;
+  onAddGear: () => void;
+  onSelectAircraft: (aircraft: Aircraft) => void;
+  onSelectNewsItem: (item: FeedItem) => void;
+}
+
+// Skeleton loader component
+function SkeletonCard({ className = '' }: { className?: string }) {
+  return (
+    <div className={`bg-slate-800 border border-slate-700 rounded-xl p-4 animate-pulse ${className}`}>
+      <div className="flex gap-4">
+        <div className="w-16 h-16 bg-slate-700 rounded-lg flex-shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-slate-700 rounded w-3/4" />
+          <div className="h-3 bg-slate-700 rounded w-1/2" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Empty state component
+function EmptyState({
+  icon,
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="bg-slate-800/50 border border-slate-700/50 border-dashed rounded-xl p-6 text-center">
+      <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3">
+        {icon}
+      </div>
+      <h4 className="text-sm font-medium text-white mb-1">{title}</h4>
+      <p className="text-xs text-slate-400 mb-3">{description}</p>
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded-lg transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Aircraft card for dashboard
+function DashboardAircraftCard({
+  aircraft,
+  onClick,
+}: {
+  aircraft: Aircraft;
+  onClick: () => void;
+}) {
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+  
+  return (
+    <button
+      onClick={onClick}
+      className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 hover:bg-slate-700/50 hover:border-slate-600 transition-colors text-left group"
+    >
+      <div className="flex gap-4">
+        {aircraft.hasImage ? (
+          <img
+            src={`${API_BASE}/api/aircraft/${aircraft.id}/image`}
+            alt={aircraft.name}
+            className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+          />
+        ) : (
+          <div className="w-16 h-16 bg-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
+            <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-medium text-white truncate group-hover:text-primary-400 transition-colors">
+            {aircraft.name}
+          </h4>
+          {aircraft.nickname && (
+            <p className="text-xs text-slate-400 truncate">"{aircraft.nickname}"</p>
+          )}
+          <span className="inline-block mt-1 px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300 capitalize">
+            {aircraft.type.replace('_', ' ')}
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// Gear card for dashboard
+function DashboardGearCard({ item }: { item: InventoryItem }) {
+  const conditionColors: Record<string, string> = {
+    new: 'text-green-400',
+    used: 'text-yellow-400',
+    broken: 'text-red-400',
+    spare: 'text-blue-400',
+  };
+
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+      <div className="flex gap-4">
+        {item.imageUrl ? (
+          <img
+            src={item.imageUrl}
+            alt={item.name}
+            className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+          />
+        ) : (
+          <div className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
+            <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-medium text-white truncate">{item.name}</h4>
+          <p className="text-xs text-slate-400 truncate capitalize">
+            {item.category.replace('_', ' ')}
+            {item.manufacturer && ` • ${item.manufacturer}`}
+          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`text-xs ${conditionColors[item.condition] || 'text-slate-400'}`}>
+              {item.condition}
+            </span>
+            {item.quantity > 1 && (
+              <span className="text-xs text-slate-500">×{item.quantity}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Radio snapshot component
+function RadioSnapshot() {
+  // For now, show CTA to add radio - this could be expanded with real radio data
+  return (
+    <EmptyState
+      icon={
+        <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+        </svg>
+      }
+      title="No Radio Configured"
+      description="Add your transmitter to track firmware and ELRS settings"
+      actionLabel="Add Radio"
+      onAction={() => {
+        // TODO: Navigate to radio setup
+      }}
+    />
+  );
+}
+
+// News preview card (smaller than main feed)
+function DashboardNewsCard({
+  item,
+  source,
+  onClick,
+}: {
+  item: FeedItem;
+  source?: SourceInfo;
+  onClick: () => void;
+}) {
+  const imageUrl = item.media?.imageUrl;
+  
+  return (
+    <button
+      onClick={onClick}
+      className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 hover:bg-slate-700/50 hover:border-slate-600 transition-colors text-left group"
+    >
+      <div className="flex gap-3">
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt=""
+            className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            {source && (
+              <span className="text-xs text-slate-500">{source.name}</span>
+            )}
+            {item.publishedAt && (
+              <span className="text-xs text-slate-600">
+                {new Date(item.publishedAt).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+          <h4 className="text-sm font-medium text-white line-clamp-2 group-hover:text-primary-400 transition-colors">
+            {item.title}
+          </h4>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+export function Dashboard({
+  recentAircraft,
+  recentGear,
+  recentNews,
+  sources,
+  isAircraftLoading,
+  isGearLoading,
+  isNewsLoading,
+  onViewAllNews,
+  onAddAircraft,
+  onAddGear,
+  onSelectAircraft,
+  onSelectNewsItem,
+}: DashboardProps) {
+  const sourceMap = new Map(sources.map(s => [s.id, s]));
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="p-6 max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-white mb-2">Dashboard</h1>
+          <p className="text-slate-400">Welcome back! Here's your RotorLife overview.</p>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="flex gap-3 mb-8">
+          <button
+            onClick={onAddAircraft}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Aircraft
+          </button>
+          <button
+            onClick={onAddGear}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Gear
+          </button>
+        </div>
+
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recently Added Aircraft */}
+          <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                My Aircraft
+              </h2>
+              {recentAircraft.length > 0 && (
+                <span className="text-xs text-slate-500">{recentAircraft.length} total</span>
+              )}
+            </div>
+            <div className="space-y-3">
+              {isAircraftLoading ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : recentAircraft.length === 0 ? (
+                <EmptyState
+                  icon={
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  }
+                  title="No Aircraft Yet"
+                  description="Add your first drone to start tracking builds and settings"
+                  actionLabel="Add Aircraft"
+                  onAction={onAddAircraft}
+                />
+              ) : (
+                recentAircraft.slice(0, 3).map(aircraft => (
+                  <DashboardAircraftCard
+                    key={aircraft.id}
+                    aircraft={aircraft}
+                    onClick={() => onSelectAircraft(aircraft)}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* Recently Added Gear */}
+          <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                My Gear
+              </h2>
+              {recentGear.length > 0 && (
+                <span className="text-xs text-slate-500">{recentGear.length} items</span>
+              )}
+            </div>
+            <div className="space-y-3">
+              {isGearLoading ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : recentGear.length === 0 ? (
+                <EmptyState
+                  icon={
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  }
+                  title="No Gear Yet"
+                  description="Track your FPV equipment inventory"
+                  actionLabel="Add Gear"
+                  onAction={onAddGear}
+                />
+              ) : (
+                recentGear.slice(0, 4).map(item => (
+                  <DashboardGearCard key={item.id} item={item} />
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* Radio Snapshot */}
+          <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                </svg>
+                Radio
+              </h2>
+            </div>
+            <RadioSnapshot />
+          </section>
+
+          {/* Quick News Peek */}
+          <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                </svg>
+                Latest News
+              </h2>
+              <button
+                onClick={onViewAllNews}
+                className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+              >
+                View All →
+              </button>
+            </div>
+            <div className="space-y-2">
+              {isNewsLoading ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : recentNews.length === 0 ? (
+                <div className="text-center py-4 text-slate-500 text-sm">
+                  No news available
+                </div>
+              ) : (
+                recentNews.slice(0, 4).map(item => (
+                  <DashboardNewsCard
+                    key={item.id}
+                    item={item}
+                    source={sourceMap.get(item.source)}
+                    onClick={() => onSelectNewsItem(item)}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}

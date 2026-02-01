@@ -191,11 +191,12 @@ export interface InventorySummary {
 }
 
 // App section navigation
-export type AppSection = 'news' | 'equipment' | 'inventory' | 'aircraft';
+export type AppSection = 'dashboard' | 'news' | 'equipment' | 'inventory' | 'aircraft';
 
-export const APP_SECTIONS: { value: AppSection; label: string; icon: string }[] = [
+export const APP_SECTIONS: { value: AppSection; label: string; icon: string; requiresAuth?: boolean }[] = [
+  { value: 'dashboard', label: 'Dashboard', icon: '🏠', requiresAuth: true },
   { value: 'news', label: 'News', icon: '📰' },
   { value: 'equipment', label: 'Equipment', icon: '🛒' },
-  { value: 'inventory', label: 'My Gear', icon: '🎒' },
-  { value: 'aircraft', label: 'My Aircraft', icon: '🚁' },
+  { value: 'inventory', label: 'My Gear', icon: '🎒', requiresAuth: true },
+  { value: 'aircraft', label: 'My Aircraft', icon: '🚁', requiresAuth: true },
 ];
