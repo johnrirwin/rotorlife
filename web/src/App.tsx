@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, RadioSection, BatterySection } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, RadioSection, BatterySection } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
@@ -25,8 +25,8 @@ function App() {
   // Track previous auth state to detect logout
   const [wasAuthenticated, setWasAuthenticated] = useState<boolean | null>(null);
 
-  // Section state - starts as 'news' but will be set based on auth
-  const [activeSection, setActiveSection] = useState<AppSection>('news');
+  // Section state - starts as 'home' (public homepage for logged out, will redirect to dashboard for logged in)
+  const [activeSection, setActiveSection] = useState<AppSection>('home');
 
   // News feed state
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -74,15 +74,18 @@ function App() {
     if (wasAuthenticated === null) {
       setWasAuthenticated(isAuthenticated);
       // Set initial section based on auth state
+      // If authenticated, go to dashboard; if not, stay on home
       if (isAuthenticated) {
         setActiveSection('dashboard');
+      } else {
+        setActiveSection('home');
       }
       return;
     }
     
     // Detect logout: was authenticated, now not
     if (wasAuthenticated && !isAuthenticated) {
-      setActiveSection('news');
+      setActiveSection('home');
     }
     
     // Detect login: was not authenticated, now is
@@ -418,6 +421,11 @@ function App() {
 
   // Handle section change with auth check for protected sections
   const handleSectionChange = useCallback((section: AppSection) => {
+    // When authenticated user clicks home, redirect to dashboard
+    if (section === 'home' && isAuthenticated) {
+      setActiveSection('dashboard');
+      return;
+    }
     // Dashboard, inventory, aircraft, radio, and batteries require authentication
     if ((section === 'dashboard' || section === 'inventory' || section === 'aircraft' || section === 'radio' || section === 'batteries') && !isAuthenticated) {
       setAuthModal('login');
@@ -459,6 +467,14 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Homepage Section - for unauthenticated users */}
+        {activeSection === 'home' && !isAuthenticated && (
+          <Homepage
+            onSignIn={() => setAuthModal('login')}
+            onExploreNews={() => setActiveSection('news')}
+          />
+        )}
+
         {/* Dashboard Section - only for authenticated users */}
         {activeSection === 'dashboard' && isAuthenticated && (
           <Dashboard

@@ -23,8 +23,9 @@ export { RadioSection } from './RadioSection';
 // Battery components
 export { BatterySection } from './BatterySection';
 
-// Dashboard
+// Dashboard & Homepage
 export { Dashboard } from './Dashboard';
+export { Homepage } from './Homepage';
 
 // Auth components
 export { AuthCallback } from './AuthCallback';
