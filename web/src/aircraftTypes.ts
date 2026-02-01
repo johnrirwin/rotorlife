@@ -66,6 +66,7 @@ export interface AircraftELRSSettings {
 // ELRS configuration structure
 export interface ELRSConfig {
   bindingPhrase?: string;
+  modelMatch?: number; // Model match number (0-63)
   rate?: number;
   tlm?: number;
   power?: number;

@@ -149,7 +149,14 @@ export async function setELRSSettings(
 // Aircraft Image
 
 export function getAircraftImageUrl(aircraftId: string): string {
-  return `${API_BASE}/api/aircraft/${aircraftId}/image`;
+  const token = getAccessToken();
+  const baseUrl = `${API_BASE}/api/aircraft/${aircraftId}/image`;
+  // Add timestamp to prevent browser caching issues
+  const timestamp = Date.now();
+  if (token) {
+    return `${baseUrl}?token=${encodeURIComponent(token)}&t=${timestamp}`;
+  }
+  return `${baseUrl}?t=${timestamp}`;
 }
 
 export async function uploadAircraftImage(aircraftId: string, imageFile: File): Promise<void> {

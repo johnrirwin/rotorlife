@@ -330,6 +330,23 @@ export function AircraftDetail({
                     />
                   </div>
 
+                  {/* Model Match Number */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Model Match Number
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="63"
+                      value={elrsSettings.modelMatch ?? ''}
+                      onChange={(e) => setElrsSettings({ ...elrsSettings, modelMatch: e.target.value ? parseInt(e.target.value) : undefined })}
+                      placeholder="0-63 (optional)"
+                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Set to match your transmitter model ID for model matching</p>
+                  </div>
+
                   {/* Rate */}
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">

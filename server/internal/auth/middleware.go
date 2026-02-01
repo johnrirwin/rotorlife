@@ -66,17 +66,21 @@ func GetUserID(ctx context.Context) string {
 	return userID
 }
 
-// extractToken extracts the JWT token from the Authorization header
+// extractToken extracts the JWT token from the Authorization header or query parameter
 func extractToken(r *http.Request) string {
+	// First check Authorization header
 	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return ""
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			return parts[1]
+		}
 	}
 
-	parts := strings.SplitN(authHeader, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-		return ""
+	// Fall back to query parameter (for image URLs in img tags)
+	if token := r.URL.Query().Get("token"); token != "" {
+		return token
 	}
 
-	return parts[1]
+	return ""
 }
