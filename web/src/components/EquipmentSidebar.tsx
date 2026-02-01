@@ -48,68 +48,116 @@ export function EquipmentSidebar({
     ? searchParams.category 
     : inventoryCategory;
 
+  // Navigation item component with lock state for unauthenticated sections
+  const NavItem = ({
+    section,
+    icon,
+    label,
+    requiresAuth = false,
+    badge,
+  }: {
+    section: AppSection;
+    icon: React.ReactNode;
+    label: string;
+    requiresAuth?: boolean;
+    badge?: number;
+  }) => {
+    const isLocked = requiresAuth && !isAuthenticated;
+    const isActive = activeSection === section;
+
+    return (
+      <button
+        onClick={() => onSectionChange(section)}
+        disabled={false} // Always allow click - handleSectionChange in App.tsx will handle auth prompt
+        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+          isActive
+            ? 'bg-primary-600/20 text-primary-400'
+            : isLocked
+            ? 'text-slate-500 hover:text-slate-400 hover:bg-slate-800/50'
+            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+        }`}
+        title={isLocked ? 'Sign in to access' : undefined}
+      >
+        {icon}
+        <span className="font-medium flex-1">{label}</span>
+        {isLocked && (
+          <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        )}
+        {badge !== undefined && badge > 0 && !isLocked && (
+          <span className="px-2 py-0.5 bg-slate-700 rounded-full text-xs text-slate-300">
+            {badge}
+          </span>
+        )}
+      </button>
+    );
+  };
+
   return (
     <aside className="w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden">
       {/* Section Switcher */}
       <div className="p-4 border-b border-slate-800">
         <nav className="flex flex-col gap-1">
-          <button
-            onClick={() => onSectionChange('news')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeSection === 'news' 
-                ? 'bg-primary-600/20 text-primary-400' 
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-            </svg>
-            <span className="font-medium">News Feed</span>
-          </button>
-          <button
-            onClick={() => onSectionChange('equipment')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeSection === 'equipment' 
-                ? 'bg-primary-600/20 text-primary-400' 
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-            <span className="font-medium">Shop</span>
-          </button>
-          <button
-            onClick={() => onSectionChange('inventory')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeSection === 'inventory' 
-                ? 'bg-primary-600/20 text-primary-400' 
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-            <span className="font-medium">My Gear</span>
-            {inventorySummary && inventorySummary.totalItems > 0 && (
-              <span className="ml-auto px-2 py-0.5 bg-slate-700 rounded-full text-xs text-slate-300">
-                {inventorySummary.totalItems}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => onSectionChange('aircraft')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeSection === 'aircraft' 
-                ? 'bg-primary-600/20 text-primary-400' 
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-            <span className="font-medium">My Aircraft</span>
-          </button>
+          {/* Dashboard - only shown when authenticated */}
+          {isAuthenticated && (
+            <NavItem
+              section="dashboard"
+              label="Dashboard"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+              }
+            />
+          )}
+
+          {/* News Feed - always accessible */}
+          <NavItem
+            section="news"
+            label="News Feed"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+              </svg>
+            }
+          />
+
+          {/* Shop - always accessible */}
+          <NavItem
+            section="equipment"
+            label="Shop"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+            }
+          />
+
+          {/* My Gear - requires auth */}
+          <NavItem
+            section="inventory"
+            label="My Gear"
+            requiresAuth
+            badge={inventorySummary?.totalItems}
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            }
+          />
+
+          {/* My Aircraft - requires auth */}
+          <NavItem
+            section="aircraft"
+            label="My Aircraft"
+            requiresAuth
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            }
+          />
         </nav>
       </div>
 

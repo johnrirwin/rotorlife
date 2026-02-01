@@ -17,5 +17,8 @@ export { AircraftList } from './AircraftList';
 export { AircraftForm } from './AircraftForm';
 export { AircraftDetail } from './AircraftDetail';
 
+// Dashboard
+export { Dashboard } from './Dashboard';
+
 // Auth components
 export { AuthCallback } from './AuthCallback';
