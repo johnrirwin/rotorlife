@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
-	"github.com/johnrirwin/mcp-news-feed/internal/aircraft"
-	"github.com/johnrirwin/mcp-news-feed/internal/auth"
-	"github.com/johnrirwin/mcp-news-feed/internal/equipment"
-	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/aggregator"
+	"github.com/johnrirwin/rotorlife/internal/aircraft"
+	"github.com/johnrirwin/rotorlife/internal/auth"
+	"github.com/johnrirwin/rotorlife/internal/equipment"
+	"github.com/johnrirwin/rotorlife/internal/inventory"
+	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 type Server struct {

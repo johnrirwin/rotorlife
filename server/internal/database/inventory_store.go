@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 // InventoryStore handles inventory database operations

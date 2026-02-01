@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/cache"
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
-	"github.com/johnrirwin/mcp-news-feed/internal/sources"
-	"github.com/johnrirwin/mcp-news-feed/internal/tagging"
+	"github.com/johnrirwin/rotorlife/internal/cache"
+	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/sources"
+	"github.com/johnrirwin/rotorlife/internal/tagging"
 )
 
 type Aggregator struct {

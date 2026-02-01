@@ -9,8 +9,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
-	"github.com/johnrirwin/mcp-news-feed/internal/ratelimit"
+	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/ratelimit"
 )
 
 type ForumFetcher struct {

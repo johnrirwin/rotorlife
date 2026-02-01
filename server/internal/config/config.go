@@ -131,8 +131,8 @@ func loadAuthConfig() AuthConfig {
 
 	return AuthConfig{
 		JWTSecret:          getEnvOrDefault("AUTH_JWT_SECRET", "change-me-in-production"),
-		JWTIssuer:          getEnvOrDefault("AUTH_JWT_ISSUER", "mcp-news-feed"),
-		JWTAudience:        getEnvOrDefault("AUTH_JWT_AUDIENCE", "mcp-news-feed"),
+		JWTIssuer:          getEnvOrDefault("AUTH_JWT_ISSUER", "rotorlife"),
+		JWTAudience:        getEnvOrDefault("AUTH_JWT_AUDIENCE", "rotorlife-users"),
 		AccessTokenTTL:     accessTTL,
 		RefreshTokenTTL:    refreshTTL,
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),

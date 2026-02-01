@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/auth"
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/auth"
+	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 // AuthAPI handles authentication HTTP endpoints

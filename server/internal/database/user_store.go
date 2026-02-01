@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 // UserStore handles user database operations

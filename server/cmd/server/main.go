@@ -6,8 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/app"
-	"github.com/johnrirwin/mcp-news-feed/internal/config"
+	"github.com/johnrirwin/rotorlife/internal/app"
+	"github.com/johnrirwin/rotorlife/internal/config"
 )
 
 func main() {

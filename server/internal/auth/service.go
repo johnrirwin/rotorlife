@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/johnrirwin/mcp-news-feed/internal/config"
-	"github.com/johnrirwin/mcp-news-feed/internal/database"
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/config"
+	"github.com/johnrirwin/rotorlife/internal/database"
+	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/models"
 	"golang.org/x/crypto/bcrypt"
 )
 

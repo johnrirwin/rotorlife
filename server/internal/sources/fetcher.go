@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 type Fetcher interface {

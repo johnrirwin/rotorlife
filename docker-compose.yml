@@ -53,8 +53,8 @@ services:
       - DB_NAME=mcp_drone
       - DB_SSLMODE=disable
       - AUTH_JWT_SECRET=dev-secret-change-in-production
-      - AUTH_JWT_ISSUER=mcp-news-feed
-      - AUTH_JWT_AUDIENCE=mcp-news-feed-users
+      - AUTH_JWT_ISSUER=rotorlife
+      - AUTH_JWT_AUDIENCE=rotorlife-users
     depends_on:
       postgres:
         condition: service_healthy

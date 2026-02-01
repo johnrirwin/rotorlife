@@ -1,4 +1,4 @@
-module github.com/johnrirwin/mcp-news-feed
+module github.com/johnrirwin/rotorlife
 
 go 1.24.0
 

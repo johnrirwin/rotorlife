@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/database"
-	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/database"
+	"github.com/johnrirwin/rotorlife/internal/inventory"
+	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 // Service handles aircraft operations

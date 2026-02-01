@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/logging"
 )
 
 type Server struct {

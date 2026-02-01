@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
-	"github.com/johnrirwin/mcp-news-feed/internal/equipment"
-	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/aggregator"
+	"github.com/johnrirwin/rotorlife/internal/equipment"
+	"github.com/johnrirwin/rotorlife/internal/inventory"
+	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 type Handler struct {

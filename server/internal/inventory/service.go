@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/database"
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/database"
+	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 // InventoryManager defines the interface for inventory operations
