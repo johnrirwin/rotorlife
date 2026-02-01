@@ -62,11 +62,6 @@ function App() {
   const { filters, updateFilter } = useFilters();
   const debouncedQuery = useDebounce(filters.query, 300);
 
-  // Handle OAuth callback - AFTER all hooks are called
-  if (isAuthCallback) {
-    return <AuthCallback />;
-  }
-
   // Load sources and sellers on mount
   useEffect(() => {
     getSources()
@@ -396,6 +391,11 @@ function App() {
     }
     setActiveSection(section);
   }, [isAuthenticated]);
+
+  // Handle OAuth callback - must be after all hooks are called
+  if (isAuthCallback) {
+    return <AuthCallback />;
+  }
 
   return (
     <div className="flex h-screen bg-slate-900 text-white overflow-hidden">
