@@ -397,11 +397,11 @@ func (s *BatteryStore) List(ctx context.Context, userID string, params models.Ba
 		if !validDirection {
 			direction = "DESC"
 		}
+		nullsClause := "LAST"
 		if direction == "ASC" {
-			orderBy = "last_logged ASC NULLS FIRST"
-		} else {
-			orderBy = "last_logged DESC NULLS LAST"
+			nullsClause = "FIRST"
 		}
+		orderBy = fmt.Sprintf("last_logged %s NULLS %s", direction, nullsClause)
 	case "cycles":
 		if !validDirection {
 			direction = "DESC"

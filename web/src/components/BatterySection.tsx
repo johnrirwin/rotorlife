@@ -688,9 +688,15 @@ export function BatterySection({ onError }: BatterySectionProps) {
                           )}
                           {(log.min_cell_v !== undefined || log.max_cell_v !== undefined) && (
                             <span className="ml-3 text-slate-400">
-                              Voltage: {log.min_cell_v !== undefined && log.max_cell_v !== undefined && log.min_cell_v === log.max_cell_v 
-                                ? `${log.min_cell_v.toFixed(2)}V/cell` 
-                                : `${log.min_cell_v?.toFixed(2) || 'N/A'}-${log.max_cell_v?.toFixed(2) || 'N/A'}V/cell`}
+                              Voltage: {
+                                log.min_cell_v !== undefined && log.max_cell_v !== undefined
+                                  ? (log.min_cell_v === log.max_cell_v 
+                                    ? `${log.min_cell_v.toFixed(2)}V/cell`
+                                    : `${log.min_cell_v.toFixed(2)}-${log.max_cell_v.toFixed(2)}V/cell`)
+                                  : log.min_cell_v !== undefined
+                                    ? `${log.min_cell_v.toFixed(2)}V/cell`
+                                    : `${log.max_cell_v!.toFixed(2)}V/cell`
+                              }
                             </span>
                           )}
                           {log.storage_voltage_ok !== undefined && (
