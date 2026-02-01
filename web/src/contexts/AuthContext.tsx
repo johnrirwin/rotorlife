@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import { createContext, useReducer, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type {
   AuthState,
@@ -60,8 +60,8 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
   }
 }
 
-// Context type
-interface AuthContextType extends AuthState {
+// Context type - exported for use by useAuth hook
+export interface AuthContextType extends AuthState {
   signup: (params: SignupParams) => Promise<void>;
   login: (params: LoginParams) => Promise<void>;
   loginWithGoogle: (params: GoogleLoginParams) => Promise<void>;
@@ -69,8 +69,8 @@ interface AuthContextType extends AuthState {
   clearError: () => void;
 }
 
-// Create context
-const AuthContext = createContext<AuthContextType | null>(null);
+// Create context - exported for use by useAuth hook
+export const AuthContext = createContext<AuthContextType | null>(null);
 
 // Provider component
 interface AuthProviderProps {
@@ -175,13 +175,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-// Hook for using auth context
-export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 }
