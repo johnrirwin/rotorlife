@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/cache"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
-	"github.com/johnrirwin/mcp-news-feed/internal/ratelimit"
+	"github.com/johnrirwin/rotorlife/internal/cache"
+	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/ratelimit"
 )
 
 // RaceDayQuads is the adapter for RaceDayQuads.com

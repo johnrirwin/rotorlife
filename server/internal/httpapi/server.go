@@ -8,27 +8,35 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
-	"github.com/johnrirwin/mcp-news-feed/internal/equipment"
-	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/aggregator"
+	"github.com/johnrirwin/rotorlife/internal/aircraft"
+	"github.com/johnrirwin/rotorlife/internal/auth"
+	"github.com/johnrirwin/rotorlife/internal/equipment"
+	"github.com/johnrirwin/rotorlife/internal/inventory"
+	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 type Server struct {
-	agg          *aggregator.Aggregator
-	equipmentSvc *equipment.Service
-	inventorySvc inventory.InventoryManager
-	logger       *logging.Logger
-	server       *http.Server
+	agg            *aggregator.Aggregator
+	equipmentSvc   *equipment.Service
+	inventorySvc   inventory.InventoryManager
+	aircraftSvc    *aircraft.Service
+	authSvc        *auth.Service
+	authMiddleware *auth.Middleware
+	logger         *logging.Logger
+	server         *http.Server
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *Server {
 	return &Server{
-		agg:          agg,
-		equipmentSvc: equipmentSvc,
-		inventorySvc: inventorySvc,
-		logger:       logger,
+		agg:            agg,
+		equipmentSvc:   equipmentSvc,
+		inventorySvc:   inventorySvc,
+		aircraftSvc:    aircraftSvc,
+		authSvc:        authSvc,
+		authMiddleware: authMiddleware,
+		logger:         logger,
 	}
 }
 
@@ -40,9 +48,21 @@ func (s *Server) Start(addr string) error {
 	mux.HandleFunc("/api/sources", s.corsMiddleware(s.handleGetSources))
 	mux.HandleFunc("/api/refresh", s.corsMiddleware(s.handleRefresh))
 
+	// Auth routes
+	if s.authSvc != nil && s.authMiddleware != nil {
+		authAPI := NewAuthAPI(s.authSvc, s.authMiddleware, s.logger)
+		authAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
 	// Equipment and inventory routes
-	equipmentAPI := NewEquipmentAPI(s.equipmentSvc, s.inventorySvc, s.logger)
+	equipmentAPI := NewEquipmentAPI(s.equipmentSvc, s.inventorySvc, s.authMiddleware, s.logger)
 	equipmentAPI.RegisterRoutes(mux, s.corsMiddleware)
+
+	// Aircraft routes
+	if s.aircraftSvc != nil && s.authMiddleware != nil {
+		aircraftAPI := NewAircraftAPI(s.aircraftSvc, s.authMiddleware, s.logger)
+		aircraftAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
 
 	// Health check
 	mux.HandleFunc("/health", s.handleHealth)
@@ -68,8 +88,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

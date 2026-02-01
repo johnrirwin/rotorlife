@@ -51,6 +51,13 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=mcp_drone
+      - DB_SSLMODE=disable
+      - AUTH_JWT_SECRET=dev-secret-change-in-production
+      - AUTH_JWT_ISSUER=rotorlife
+      - AUTH_JWT_AUDIENCE=rotorlife-users
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=http://localhost:8080/api/auth/google/callback
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,6 +76,8 @@ services:
       dockerfile: Dockerfile.web
       args:
         - VITE_API_BASE_URL=
+        - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+        - VITE_API_URL=http://localhost:8080
     ports:
       - "3000:80"
     depends_on:

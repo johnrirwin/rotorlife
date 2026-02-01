@@ -78,10 +78,18 @@ func (db *DB) Close() error {
 // Migrate runs database migrations
 func (db *DB) Migrate(ctx context.Context) error {
 	migrations := []string{
+		migrationUsers,
+		migrationUserIdentities,
+		migrationRefreshTokens,
 		migrationSellers,
 		migrationEquipmentItems,
 		migrationInventoryItems,
 		migrationIndexes,
+		migrationAircraft,
+		migrationAircraftComponents,
+		migrationAircraftELRSSettings,
+		migrationAircraftIndexes,
+		migrationAircraftImageStorage,
 	}
 
 	for i, migration := range migrations {
@@ -94,6 +102,52 @@ func (db *DB) Migrate(ctx context.Context) error {
 }
 
 // Migration SQL statements
+const migrationUsers = `
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255),
+    display_name VARCHAR(255) NOT NULL,
+    avatar_url VARCHAR(1024),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_login_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+`
+
+const migrationUserIdentities = `
+CREATE TABLE IF NOT EXISTS user_identities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider VARCHAR(50) NOT NULL,
+    provider_subject VARCHAR(255) NOT NULL,
+    provider_email VARCHAR(255),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(provider, provider_subject)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_identities_provider ON user_identities(provider, provider_subject);
+`
+
+const migrationRefreshTokens = `
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
+`
+
 const migrationSellers = `
 CREATE TABLE IF NOT EXISTS sellers (
     id VARCHAR(50) PRIMARY KEY,
@@ -137,7 +191,7 @@ CREATE TABLE IF NOT EXISTS equipment_items (
 const migrationInventoryItems = `
 CREATE TABLE IF NOT EXISTS inventory_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id VARCHAR(100) DEFAULT 'default',
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(512) NOT NULL,
     category VARCHAR(50) NOT NULL,
     manufacturer VARCHAR(255),
@@ -170,4 +224,56 @@ CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory_items(category);
 CREATE INDEX IF NOT EXISTS idx_inventory_condition ON inventory_items(condition);
 CREATE INDEX IF NOT EXISTS idx_inventory_build ON inventory_items(build_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_name_search ON inventory_items USING gin(to_tsvector('english', name));
+`
+
+const migrationAircraft = `
+CREATE TABLE IF NOT EXISTS aircraft (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    nickname VARCHAR(255),
+    type VARCHAR(50),
+    image_url VARCHAR(1024),
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+`
+
+const migrationAircraftComponents = `
+CREATE TABLE IF NOT EXISTS aircraft_components (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    aircraft_id UUID NOT NULL REFERENCES aircraft(id) ON DELETE CASCADE,
+    category VARCHAR(50) NOT NULL,
+    inventory_item_id UUID REFERENCES inventory_items(id) ON DELETE SET NULL,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(aircraft_id, category)
+);
+`
+
+const migrationAircraftELRSSettings = `
+CREATE TABLE IF NOT EXISTS aircraft_elrs_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    aircraft_id UUID NOT NULL REFERENCES aircraft(id) ON DELETE CASCADE UNIQUE,
+    settings_json JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+`
+
+const migrationAircraftIndexes = `
+CREATE INDEX IF NOT EXISTS idx_aircraft_user ON aircraft(user_id);
+CREATE INDEX IF NOT EXISTS idx_aircraft_type ON aircraft(type);
+CREATE INDEX IF NOT EXISTS idx_aircraft_name_search ON aircraft USING gin(to_tsvector('english', name));
+CREATE INDEX IF NOT EXISTS idx_aircraft_components_aircraft ON aircraft_components(aircraft_id);
+CREATE INDEX IF NOT EXISTS idx_aircraft_components_inventory ON aircraft_components(inventory_item_id);
+CREATE INDEX IF NOT EXISTS idx_aircraft_elrs_aircraft ON aircraft_elrs_settings(aircraft_id);
+`
+
+const migrationAircraftImageStorage = `
+ALTER TABLE aircraft ADD COLUMN IF NOT EXISTS image_data BYTEA;
+ALTER TABLE aircraft ADD COLUMN IF NOT EXISTS image_type VARCHAR(20);
+ALTER TABLE aircraft DROP COLUMN IF EXISTS image_url;
 `

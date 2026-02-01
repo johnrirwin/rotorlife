@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/cache"
-	"github.com/johnrirwin/mcp-news-feed/internal/logging"
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
-	"github.com/johnrirwin/mcp-news-feed/internal/sellers"
+	"github.com/johnrirwin/rotorlife/internal/cache"
+	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/sellers"
 )
 
 // Service handles equipment aggregation from multiple sellers

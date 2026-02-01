@@ -1,6 +1,7 @@
 import type { EquipmentCategory, EquipmentSearchParams, SellerInfo, InventorySummary } from '../equipmentTypes';
 import { EQUIPMENT_CATEGORIES, ITEM_CONDITIONS } from '../equipmentTypes';
 import type { AppSection } from '../equipmentTypes';
+import type { User } from '../authTypes';
 
 interface EquipmentSidebarProps {
   activeSection: AppSection;
@@ -12,6 +13,12 @@ interface EquipmentSidebarProps {
   inventoryCategory: EquipmentCategory | null;
   inventoryCondition: string | null;
   onInventoryFilterChange: (category: EquipmentCategory | null, condition: string | null) => void;
+  // Auth props
+  isAuthenticated: boolean;
+  user: User | null;
+  authLoading: boolean;
+  onSignIn: () => void;
+  onSignOut: () => void;
 }
 
 export function EquipmentSidebar({
@@ -23,6 +30,11 @@ export function EquipmentSidebar({
   inventoryCategory,
   inventoryCondition,
   onInventoryFilterChange,
+  isAuthenticated,
+  user,
+  authLoading,
+  onSignIn,
+  onSignOut,
 }: EquipmentSidebarProps) {
   const handleCategorySelect = (category: EquipmentCategory | undefined) => {
     if (activeSection === 'equipment') {
@@ -84,6 +96,19 @@ export function EquipmentSidebar({
                 {inventorySummary.totalItems}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => onSectionChange('aircraft')}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+              activeSection === 'aircraft' 
+                ? 'bg-primary-600/20 text-primary-400' 
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+            <span className="font-medium">My Aircraft</span>
           </button>
         </nav>
       </div>
@@ -167,6 +192,65 @@ export function EquipmentSidebar({
           </div>
         </div>
       )}
+
+      {/* Spacer to push user section to bottom - only when no inventory filters showing */}
+      {activeSection !== 'inventory' && <div className="flex-1" />}
+
+      {/* User section at bottom */}
+      <div className="p-4 border-t border-slate-800">
+        {authLoading ? (
+          <div className="flex items-center justify-center py-2">
+            <div className="w-5 h-5 border-2 border-slate-600 border-t-primary-500 rounded-full animate-spin" />
+          </div>
+        ) : isAuthenticated && user ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              {user.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.displayName || 'User'}
+                  className="w-9 h-9 rounded-full flex-shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-primary-600 flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-sm font-medium">
+                    {(user.displayName || user.email || '?')[0].toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-white truncate">
+                  {user.displayName || user.email}
+                </div>
+                {user.displayName && user.email && (
+                  <div className="text-xs text-slate-500 truncate">
+                    {user.email}
+                  </div>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={onSignOut}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign Out
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onSignIn}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+            </svg>
+            Sign In
+          </button>
+        )}
+      </div>
     </aside>
   );
 }

@@ -3,7 +3,7 @@ package sellers
 import (
 	"context"
 
-	"github.com/johnrirwin/mcp-news-feed/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/models"
 )
 
 // Adapter is the interface that all seller integrations must implement
