@@ -22,9 +22,23 @@ func (e *ServiceError) Error() string {
 	return e.Message
 }
 
+// Store defines the interface for battery storage operations
+type Store interface {
+	BatteryCodeExists(ctx context.Context, userID, code string) (bool, error)
+	Create(ctx context.Context, userID, batteryCode string, params models.CreateBatteryParams) (*models.Battery, error)
+	Get(ctx context.Context, id, userID string) (*models.Battery, error)
+	GetByCode(ctx context.Context, code, userID string) (*models.Battery, error)
+	Update(ctx context.Context, userID string, params models.UpdateBatteryParams) (*models.Battery, error)
+	Delete(ctx context.Context, id, userID string) error
+	List(ctx context.Context, userID string, params models.BatteryListParams) (*models.BatteryListResponse, error)
+	CreateLog(ctx context.Context, userID string, params models.CreateBatteryLogParams) (*models.BatteryLog, error)
+	ListLogs(ctx context.Context, batteryID, userID string, limit int) (*models.BatteryLogListResponse, error)
+	DeleteLog(ctx context.Context, logID, userID string) error
+}
+
 // Service handles battery operations
 type Service struct {
-	store  *database.BatteryStore
+	store  Store
 	logger *logging.Logger
 }
 
