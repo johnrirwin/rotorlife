@@ -75,16 +75,60 @@ type AircraftELRSSettings struct {
 }
 
 // ELRSSettingsData represents the structured ELRS settings
+// WARNING: This struct contains SENSITIVE fields that must never be exposed publicly
 type ELRSSettingsData struct {
-	ModelMatch     *bool                  `json:"modelMatch,omitempty"`
-	ModelID        *int                   `json:"modelId,omitempty"`
-	BindPhrase     string                 `json:"bindPhrase,omitempty"`
-	PacketRate     string                 `json:"packetRate,omitempty"`     // e.g., "250Hz", "500Hz"
-	TelemetryRatio string                 `json:"telemetryRatio,omitempty"` // e.g., "1:128", "1:64"
-	TXPower        string                 `json:"txPower,omitempty"`        // e.g., "250mW", "500mW"
-	SwitchMode     string                 `json:"switchMode,omitempty"`     // e.g., "Hybrid", "Wide"
-	RFProfile      string                 `json:"rfProfile,omitempty"`
-	Extra          map[string]interface{} `json:"extra,omitempty"` // Any additional fields
+	// SENSITIVE - Never expose publicly
+	ModelMatch *bool  `json:"modelMatch,omitempty"` // SENSITIVE: Model match setting
+	ModelID    *int   `json:"modelId,omitempty"`    // SENSITIVE: Model ID
+	BindPhrase string `json:"bindPhrase,omitempty"` // SENSITIVE: Bind phrase secret
+	UID        string `json:"uid,omitempty"`        // SENSITIVE: Receiver UID
+
+	// SAFE to expose publicly
+	ReceiverModel    string `json:"receiverModel,omitempty"`    // e.g., "EP1", "RP1", "RP3"
+	PacketRate       string `json:"packetRate,omitempty"`       // e.g., "250Hz", "500Hz"
+	TelemetryRatio   string `json:"telemetryRatio,omitempty"`   // e.g., "1:128", "1:64"
+	TXPower          string `json:"txPower,omitempty"`          // e.g., "250mW", "500mW"
+	SwitchMode       string `json:"switchMode,omitempty"`       // e.g., "Hybrid", "Wide"
+	OutputPower      string `json:"outputPower,omitempty"`      // Output power (static or dynamic)
+	RegulatoryDomain string `json:"regulatoryDomain,omitempty"` // e.g., "FCC", "LBT"
+	FirmwareVersion  string `json:"firmwareVersion,omitempty"`  // e.g., "3.4.0"
+	RXProtocol       string `json:"rxProtocol,omitempty"`       // Protocol type
+	RFProfile        string `json:"rfProfile,omitempty"`
+
+	Extra map[string]interface{} `json:"extra,omitempty"` // Any additional fields (may contain sensitive data)
+}
+
+// Sanitize returns a sanitized copy of ELRS settings safe for public exposure
+// This method strips all sensitive fields: BindPhrase, ModelMatch, ModelID, UID
+func (e *ELRSSettingsData) Sanitize() *ELRSSanitizedSettings {
+	if e == nil {
+		return nil
+	}
+	return &ELRSSanitizedSettings{
+		ReceiverModel:    e.ReceiverModel,
+		PacketRate:       e.PacketRate,
+		TelemetryRatio:   e.TelemetryRatio,
+		SwitchMode:       e.SwitchMode,
+		OutputPower:      e.OutputPower,
+		RegulatoryDomain: e.RegulatoryDomain,
+		FirmwareVersion:  e.FirmwareVersion,
+		RXProtocol:       e.RXProtocol,
+	}
+}
+
+// SanitizeELRSSettings parses raw JSON ELRS settings and returns a sanitized version
+// This is the primary function to use when exposing ELRS data publicly
+func SanitizeELRSSettings(settings *AircraftELRSSettings) *ELRSSanitizedSettings {
+	if settings == nil || len(settings.Settings) == 0 {
+		return nil
+	}
+
+	var data ELRSSettingsData
+	if err := json.Unmarshal(settings.Settings, &data); err != nil {
+		return nil
+	}
+
+	return data.Sanitize()
 }
 
 // CreateAircraftParams defines parameters for creating an aircraft

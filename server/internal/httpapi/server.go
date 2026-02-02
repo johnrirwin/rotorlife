@@ -99,6 +99,12 @@ func (s *Server) Start(addr string) error {
 		pilotAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
+	// Social routes (follow/unfollow, social settings)
+	if s.userStore != nil && s.authMiddleware != nil {
+		socialAPI := NewSocialAPI(s.userStore, s.authMiddleware, s.logger)
+		socialAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
 	// Health check
 	mux.HandleFunc("/health", s.handleHealth)
 

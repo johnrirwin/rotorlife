@@ -97,6 +97,8 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationBatteryLogs,
 		migrationBatteryIndexes,
 		migrationUserProfiles,
+		migrationSocialSettings,
+		migrationFollows,
 	}
 
 	for i, migration := range migrations {
@@ -381,4 +383,35 @@ CREATE INDEX IF NOT EXISTS idx_users_call_sign ON users(LOWER(call_sign));
 -- Create index for pilot search (name search)
 CREATE INDEX IF NOT EXISTS idx_users_display_name ON users(LOWER(display_name));
 CREATE INDEX IF NOT EXISTS idx_users_google_name ON users(LOWER(google_name));
+`
+
+const migrationSocialSettings = `
+-- Add social settings columns to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_visibility VARCHAR(20) DEFAULT 'public';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS show_aircraft BOOLEAN DEFAULT true;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS allow_search BOOLEAN DEFAULT true;
+
+-- Create index for searchable users (respecting allow_search setting)
+CREATE INDEX IF NOT EXISTS idx_users_allow_search ON users(allow_search) WHERE allow_search = true;
+`
+
+const migrationFollows = `
+-- Create follows table for user relationships
+CREATE TABLE IF NOT EXISTS follows (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    follower_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    followed_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    
+    -- Prevent duplicate follow relationships
+    UNIQUE(follower_user_id, followed_user_id),
+    
+    -- Prevent self-following
+    CHECK (follower_user_id != followed_user_id)
+);
+
+-- Indexes for efficient lookups
+CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_user_id);
+CREATE INDEX IF NOT EXISTS idx_follows_followed ON follows(followed_user_id);
+CREATE INDEX IF NOT EXISTS idx_follows_created ON follows(created_at DESC);
 `

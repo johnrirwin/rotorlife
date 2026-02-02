@@ -31,6 +31,30 @@ const (
 	AvatarTypeCustom AvatarType = "custom"
 )
 
+// ProfileVisibility represents who can see a user's profile
+type ProfileVisibility string
+
+const (
+	ProfileVisibilityPublic  ProfileVisibility = "public"
+	ProfileVisibilityPrivate ProfileVisibility = "private"
+)
+
+// SocialSettings contains user's social/privacy preferences
+type SocialSettings struct {
+	ProfileVisibility ProfileVisibility `json:"profileVisibility"` // public or private
+	ShowAircraft      bool              `json:"showAircraft"`      // whether aircraft are visible to others
+	AllowSearch       bool              `json:"allowSearch"`       // whether user appears in search
+}
+
+// DefaultSocialSettings returns the default social settings for new users
+func DefaultSocialSettings() SocialSettings {
+	return SocialSettings{
+		ProfileVisibility: ProfileVisibilityPublic,
+		ShowAircraft:      true,
+		AllowSearch:       true,
+	}
+}
+
 // User represents a user in the system
 type User struct {
 	ID           string     `json:"id"`
@@ -49,6 +73,9 @@ type User struct {
 	GoogleAvatarURL string     `json:"googleAvatarUrl,omitempty"`
 	AvatarType      AvatarType `json:"avatarType,omitempty"`
 	CustomAvatarURL string     `json:"customAvatarUrl,omitempty"`
+
+	// Social settings
+	SocialSettings SocialSettings `json:"socialSettings"`
 }
 
 // EffectiveAvatarURL returns the avatar URL to use based on AvatarType
@@ -162,6 +189,13 @@ type UpdateProfileParams struct {
 	AvatarType  *AvatarType `json:"avatarType,omitempty"`
 }
 
+// UpdateSocialSettingsParams represents parameters for updating social settings
+type UpdateSocialSettingsParams struct {
+	ProfileVisibility *ProfileVisibility `json:"profileVisibility,omitempty"`
+	ShowAircraft      *bool              `json:"showAircraft,omitempty"`
+	AllowSearch       *bool              `json:"allowSearch,omitempty"`
+}
+
 // UserProfile represents the public profile response
 type UserProfile struct {
 	ID                 string    `json:"id"`
@@ -211,24 +245,63 @@ type PilotProfile struct {
 	EffectiveAvatarURL string           `json:"effectiveAvatarUrl"`
 	CreatedAt          time.Time        `json:"createdAt"`
 	Aircraft           []AircraftPublic `json:"aircraft"`
+	IsFollowing        bool             `json:"isFollowing"`        // Whether current user follows this pilot
+	FollowerCount      int              `json:"followerCount"`      // Number of followers
+	FollowingCount     int              `json:"followingCount"`     // Number of users this pilot follows
+}
+
+// PilotSummary represents minimal pilot info for follower/following lists
+type PilotSummary struct {
+	ID                 string `json:"id"`
+	CallSign           string `json:"callSign,omitempty"`
+	DisplayName        string `json:"displayName,omitempty"`
+	EffectiveAvatarURL string `json:"effectiveAvatarUrl"`
+}
+
+// Follow represents a follow relationship between two users
+type Follow struct {
+	ID             string    `json:"id"`
+	FollowerUserID string    `json:"followerUserId"` // The user who is following
+	FollowedUserID string    `json:"followedUserId"` // The user being followed
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+// FollowListResponse represents a paginated list of followers or following
+type FollowListResponse struct {
+	Pilots     []PilotSummary `json:"pilots"`
+	TotalCount int            `json:"totalCount"`
 }
 
 // AircraftPublic represents aircraft info for public pilot profiles
 type AircraftPublic struct {
-	ID          string                       `json:"id"`
-	Name        string                       `json:"name"`
-	Nickname    string                       `json:"nickname,omitempty"`
-	Type        AircraftType                 `json:"type,omitempty"`
-	HasImage    bool                         `json:"hasImage"`
-	Description string                       `json:"description,omitempty"`
-	CreatedAt   time.Time                    `json:"createdAt"`
-	Components  []AircraftComponentPublic    `json:"components,omitempty"`
+	ID           string                    `json:"id"`
+	Name         string                    `json:"name"`
+	Nickname     string                    `json:"nickname,omitempty"`
+	Type         AircraftType              `json:"type,omitempty"`
+	HasImage     bool                      `json:"hasImage"`
+	Description  string                    `json:"description,omitempty"`
+	CreatedAt    time.Time                 `json:"createdAt"`
+	Components   []AircraftComponentPublic `json:"components,omitempty"`
+	ELRSSettings *ELRSSanitizedSettings    `json:"elrsSettings,omitempty"` // Sanitized ELRS data
 }
 
 // AircraftComponentPublic represents component info for public view
 type AircraftComponentPublic struct {
 	Category ComponentCategory `json:"category"`
 	Name     string            `json:"name,omitempty"`
+}
+
+// ELRSSanitizedSettings contains only safe-to-share ELRS configuration
+// CRITICAL: This struct MUST NOT contain BindPhrase, ModelMatch, UID, or any secrets
+type ELRSSanitizedSettings struct {
+	ReceiverModel    string `json:"receiverModel,omitempty"`    // e.g., "EP1", "RP1", "RP3"
+	PacketRate       string `json:"packetRate,omitempty"`       // e.g., "250Hz", "500Hz"
+	TelemetryRatio   string `json:"telemetryRatio,omitempty"`   // e.g., "1:128", "1:64"
+	SwitchMode       string `json:"switchMode,omitempty"`       // e.g., "Hybrid", "Wide"
+	OutputPower      string `json:"outputPower,omitempty"`      // e.g., "250mW", "500mW", "Dynamic"
+	RegulatoryDomain string `json:"regulatoryDomain,omitempty"` // e.g., "FCC", "LBT"
+	FirmwareVersion  string `json:"firmwareVersion,omitempty"`  // e.g., "3.4.0"
+	RXProtocol       string `json:"rxProtocol,omitempty"`       // Protocol type if applicable
 }
 
 // CallSign validation

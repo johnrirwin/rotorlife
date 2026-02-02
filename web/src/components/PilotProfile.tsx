@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPilotProfile } from '../pilotApi';
+import { followPilot, unfollowPilot } from '../socialApi';
 import type { PilotProfile as PilotProfileType, AircraftPublic } from '../socialTypes';
+import { useAuth } from '../hooks/useAuth';
 
 interface PilotProfileProps {
   pilotId: string;
@@ -8,9 +10,14 @@ interface PilotProfileProps {
 }
 
 export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
+  const { user } = useAuth();
   const [profile, setProfile] = useState<PilotProfileType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
+
+  const isOwnProfile = user?.id === pilotId;
 
   const loadProfile = useCallback(async () => {
     try {
@@ -18,6 +25,7 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
       setError(null);
       const data = await getPilotProfile(pilotId);
       setProfile(data);
+      setIsFollowing(data.isFollowing);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load pilot profile');
     } finally {
@@ -28,6 +36,31 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  const handleFollowToggle = async () => {
+    if (isFollowLoading || isOwnProfile) return;
+    
+    try {
+      setIsFollowLoading(true);
+      if (isFollowing) {
+        await unfollowPilot(pilotId);
+        setIsFollowing(false);
+        if (profile) {
+          setProfile({ ...profile, followerCount: profile.followerCount - 1 });
+        }
+      } else {
+        await followPilot(pilotId);
+        setIsFollowing(true);
+        if (profile) {
+          setProfile({ ...profile, followerCount: profile.followerCount + 1 });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to toggle follow:', err);
+    } finally {
+      setIsFollowLoading(false);
+    }
+  };
 
   const getDisplayName = () => {
     if (!profile) return 'Unknown Pilot';
@@ -120,15 +153,34 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
           )}
 
           {/* Info */}
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold text-white">{getDisplayName()}</h1>
             {getSecondaryName() && (
               <p className="text-slate-400">{getSecondaryName()}</p>
             )}
-            <p className="text-sm text-slate-500 mt-2">
+            <div className="flex items-center gap-4 mt-2 text-sm text-slate-500">
+              <span>{profile.followerCount} followers</span>
+              <span>{profile.followingCount} following</span>
+            </div>
+            <p className="text-sm text-slate-500 mt-1">
               Member since {new Date(profile.createdAt).toLocaleDateString()}
             </p>
           </div>
+
+          {/* Follow Button */}
+          {!isOwnProfile && (
+            <button
+              onClick={handleFollowToggle}
+              disabled={isFollowLoading}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                isFollowing
+                  ? 'bg-slate-700 text-white hover:bg-slate-600'
+                  : 'bg-primary-500 text-white hover:bg-primary-600'
+              } disabled:opacity-50`}
+            >
+              {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -166,6 +218,8 @@ function AircraftCard({ aircraft }: { aircraft: AircraftPublic }) {
     return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
+  const hasElrsSettings = aircraft.elrsSettings && Object.values(aircraft.elrsSettings).some(v => v);
+
   return (
     <div className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
       {/* Image */}
@@ -190,6 +244,40 @@ function AircraftCard({ aircraft }: { aircraft: AircraftPublic }) {
         )}
         {aircraft.description && (
           <p className="text-sm text-slate-500 mt-2 line-clamp-2">{aircraft.description}</p>
+        )}
+
+        {/* ELRS Settings (Sanitized/Safe View) */}
+        {hasElrsSettings && (
+          <div className="mt-3 pt-3 border-t border-slate-700">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-xs font-medium text-slate-400">ELRS Config</span>
+              <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">
+                Safe View
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1 text-xs">
+              {aircraft.elrsSettings?.receiverModel && (
+                <div className="text-slate-500">
+                  <span className="text-slate-400">RX:</span> {aircraft.elrsSettings.receiverModel}
+                </div>
+              )}
+              {aircraft.elrsSettings?.packetRate && (
+                <div className="text-slate-500">
+                  <span className="text-slate-400">Rate:</span> {aircraft.elrsSettings.packetRate}
+                </div>
+              )}
+              {aircraft.elrsSettings?.outputPower && (
+                <div className="text-slate-500">
+                  <span className="text-slate-400">Power:</span> {aircraft.elrsSettings.outputPower}
+                </div>
+              )}
+              {aircraft.elrsSettings?.switchMode && (
+                <div className="text-slate-500">
+                  <span className="text-slate-400">Switch:</span> {aircraft.elrsSettings.switchMode}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

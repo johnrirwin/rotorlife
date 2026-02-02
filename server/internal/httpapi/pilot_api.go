@@ -101,8 +101,11 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	ctx := r.Context()
+	currentUserID := auth.GetUserID(ctx)
+
 	// Get pilot user
-	user, err := api.userStore.GetByID(r.Context(), pilotID)
+	user, err := api.userStore.GetByID(ctx, pilotID)
 	if err != nil {
 		api.logger.Error("Failed to get pilot", logging.WithField("error", err.Error()))
 		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to get pilot")
@@ -113,26 +116,59 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Get pilot's aircraft (public view)
-	aircraft, err := api.aircraftStore.ListByUserID(r.Context(), pilotID)
-	if err != nil {
-		api.logger.Error("Failed to get pilot aircraft", logging.WithField("error", err.Error()))
-		// Don't fail the whole request, just return empty aircraft list
-		aircraft = []*models.Aircraft{}
+	// Check profile visibility (owner always sees own profile)
+	isOwner := currentUserID == pilotID
+	if !isOwner && user.SocialSettings.ProfileVisibility == models.ProfileVisibilityPrivate {
+		api.writeError(w, http.StatusNotFound, "private_profile", "this profile is private")
+		return
 	}
 
-	// Build public aircraft list
-	publicAircraft := make([]models.AircraftPublic, 0, len(aircraft))
-	for _, a := range aircraft {
-		publicAircraft = append(publicAircraft, models.AircraftPublic{
-			ID:          a.ID,
-			Name:        a.Name,
-			Nickname:    a.Nickname,
-			Type:        a.Type,
-			HasImage:    a.HasImage,
-			Description: a.Description,
-			CreatedAt:   a.CreatedAt,
-		})
+	// Check if current user is following this pilot
+	isFollowing := false
+	if !isOwner {
+		isFollowing, _ = api.userStore.IsFollowing(ctx, currentUserID, pilotID)
+	}
+
+	// Get follower/following counts
+	followerCount, _ := api.userStore.GetFollowerCount(ctx, pilotID)
+	followingCount, _ := api.userStore.GetFollowingCount(ctx, pilotID)
+
+	// Get pilot's aircraft based on visibility settings
+	var publicAircraft []models.AircraftPublic
+	if isOwner || user.SocialSettings.ShowAircraft {
+		aircraft, err := api.aircraftStore.ListByUserID(ctx, pilotID)
+		if err != nil {
+			api.logger.Error("Failed to get pilot aircraft", logging.WithField("error", err.Error()))
+			// Don't fail the whole request, just return empty aircraft list
+			aircraft = []*models.Aircraft{}
+		}
+
+		// Build public aircraft list with sanitized ELRS data
+		publicAircraft = make([]models.AircraftPublic, 0, len(aircraft))
+		for _, a := range aircraft {
+			aircraftPublic := models.AircraftPublic{
+				ID:          a.ID,
+				Name:        a.Name,
+				Nickname:    a.Nickname,
+				Type:        a.Type,
+				HasImage:    a.HasImage,
+				Description: a.Description,
+				CreatedAt:   a.CreatedAt,
+			}
+
+			// Only include sanitized ELRS settings for non-owners
+			if !isOwner {
+				// Get ELRS settings and sanitize them
+				elrsSettings, err := api.aircraftStore.GetELRSSettings(ctx, a.ID)
+				if err == nil && elrsSettings != nil {
+					aircraftPublic.ELRSSettings = models.SanitizeELRSSettings(elrsSettings)
+				}
+			}
+
+			publicAircraft = append(publicAircraft, aircraftPublic)
+		}
+	} else {
+		publicAircraft = []models.AircraftPublic{}
 	}
 
 	// Build pilot profile response
@@ -144,6 +180,9 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 		EffectiveAvatarURL: user.EffectiveAvatarURL(),
 		CreatedAt:          user.CreatedAt,
 		Aircraft:           publicAircraft,
+		IsFollowing:        isFollowing,
+		FollowerCount:      followerCount,
+		FollowingCount:     followingCount,
 	}
 
 	api.writeJSON(w, http.StatusOK, profile)
