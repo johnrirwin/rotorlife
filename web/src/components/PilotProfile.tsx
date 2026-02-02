@@ -166,40 +166,32 @@ function AircraftCard({ aircraft }: { aircraft: AircraftPublic }) {
     return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-
   return (
-    <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+    <div className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
       {/* Image */}
-      <div className="aspect-video mb-3 bg-slate-800 rounded-lg overflow-hidden">
-        {aircraft.hasImage ? (
-          <img
-            src={`${API_BASE}/api/aircraft/${aircraft.id}/image`}
-            alt={aircraft.name}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <svg className="w-12 h-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </div>
-        )}
+      <div className="aspect-video bg-slate-800 flex items-center justify-center">
+        <svg className="w-12 h-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+        </svg>
       </div>
 
       {/* Info */}
-      <h3 className="font-medium text-white truncate">{aircraft.name}</h3>
-      {aircraft.nickname && (
-        <p className="text-sm text-slate-400 truncate">"{aircraft.nickname}"</p>
-      )}
-      <div className="flex items-center gap-2 mt-2">
-        <span className="px-2 py-0.5 bg-slate-800 rounded text-xs text-slate-400">
-          {formatType(aircraft.type)}
-        </span>
+      <div className="p-4">
+        <h3 className="font-medium text-white truncate">{aircraft.name}</h3>
+        {aircraft.nickname && (
+          <p className="text-sm text-slate-400 truncate mt-0.5">"{aircraft.nickname}"</p>
+        )}
+        {aircraft.type && (
+          <div className="mt-2">
+            <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
+              {formatType(aircraft.type)}
+            </span>
+          </div>
+        )}
+        {aircraft.description && (
+          <p className="text-sm text-slate-500 mt-2 line-clamp-2">{aircraft.description}</p>
+        )}
       </div>
-      {aircraft.description && (
-        <p className="text-sm text-slate-500 mt-2 line-clamp-2">{aircraft.description}</p>
-      )}
     </div>
   );
 }
