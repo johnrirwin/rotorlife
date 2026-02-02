@@ -12,6 +12,28 @@ import (
 	"github.com/johnrirwin/rotorlife/internal/testutil"
 )
 
+// setupTestAuthService creates a test auth service with a test database
+func setupTestAuthService(t *testing.T) *Service {
+	t.Helper()
+	
+	testDB := testutil.NewTestDB(t)
+	t.Cleanup(func() { testDB.Close() })
+
+	db := &database.DB{DB: testDB.DB}
+	userStore := database.NewUserStore(db)
+	logger := testutil.NullLogger()
+	cfg := config.AuthConfig{
+		JWTSecret:         "test-secret-key-minimum-32-chars-long",
+		JWTIssuer:         "rotorlife-test",
+		JWTAudience:       "rotorlife-users",
+		AccessTokenTTL:    15 * time.Minute,
+		RefreshTokenTTL:   7 * 24 * time.Hour,
+		GoogleClientID:    "test-client-id",
+		GoogleRedirectURI: "http://localhost:3000/auth/callback",
+	}
+	return NewService(userStore, cfg, logger)
+}
+
 func TestAuthError(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -50,23 +72,7 @@ func TestAuthError(t *testing.T) {
 }
 
 func TestPasswordValidation(t *testing.T) {
-	testDB := testutil.NewTestDB(t)
-	defer testDB.Close()
-
-	// Wrap in database.DB
-	db := &database.DB{DB: testDB.DB}
-	userStore := database.NewUserStore(db)
-	logger := testutil.NullLogger()
-	cfg := config.AuthConfig{
-		JWTSecret:        "test-secret-key-minimum-32-chars-long",
-		JWTIssuer:        "rotorlife-test",
-		JWTAudience:      "rotorlife-users",
-		AccessTokenTTL:   15 * time.Minute,
-		RefreshTokenTTL:  7 * 24 * time.Hour,
-		GoogleClientID:   "test-client-id",
-		GoogleRedirectURI: "http://localhost:3000/auth/callback",
-	}
-	service := NewService(userStore, cfg, logger)
+	service := setupTestAuthService(t)
 
 	tests := []struct {
 		name     string
@@ -133,23 +139,7 @@ func TestPasswordValidation(t *testing.T) {
 }
 
 func TestDefaultDisplayName(t *testing.T) {
-	testDB := testutil.NewTestDB(t)
-	defer testDB.Close()
-
-	// Wrap in database.DB
-	db := &database.DB{DB: testDB.DB}
-	userStore := database.NewUserStore(db)
-	logger := testutil.NullLogger()
-	cfg := config.AuthConfig{
-		JWTSecret:        "test-secret-key-minimum-32-chars-long",
-		JWTIssuer:        "rotorlife-test",
-		JWTAudience:      "rotorlife-users",
-		AccessTokenTTL:   15 * time.Minute,
-		RefreshTokenTTL:  7 * 24 * time.Hour,
-		GoogleClientID:   "test-client-id",
-		GoogleRedirectURI: "http://localhost:3000/auth/callback",
-	}
-	service := NewService(userStore, cfg, logger)
+	service := setupTestAuthService(t)
 
 	tests := []struct {
 		name         string
