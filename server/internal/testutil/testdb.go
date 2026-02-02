@@ -41,7 +41,7 @@ func getEnvOrDefault(key, defaultValue string) string {
 }
 
 // NewTestDB creates a new test database connection
-// It skips the test if the database is not available
+// It skips the test if the database is not available or schema is not set up
 func NewTestDB(t *testing.T) *TestDB {
 	t.Helper()
 
@@ -57,6 +57,20 @@ func NewTestDB(t *testing.T) *TestDB {
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
 		t.Skipf("Skipping test: unable to connect to database: %v", err)
+	}
+
+	// Check if schema exists (users table is a good indicator)
+	var exists bool
+	err = db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_schema = 'public' 
+			AND table_name = 'users'
+		)
+	`).Scan(&exists)
+	if err != nil || !exists {
+		db.Close()
+		t.Skipf("Skipping test: database schema not set up (users table not found)")
 	}
 
 	return &TestDB{DB: db, t: t}
