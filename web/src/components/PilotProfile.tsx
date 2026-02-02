@@ -218,7 +218,23 @@ function AircraftCard({ aircraft }: { aircraft: AircraftPublic }) {
     return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
+  const formatCategory = (category: string) => {
+    const categoryLabels: Record<string, string> = {
+      fc: 'Flight Controller',
+      esc: 'ESC',
+      elrs_module: 'ELRS RX',
+      vtx: 'VTX',
+      motors: 'Motors',
+      camera: 'Camera',
+      frame: 'Frame',
+      propellers: 'Props',
+      antenna: 'Antenna',
+    };
+    return categoryLabels[category] || category;
+  };
+
   const hasElrsSettings = aircraft.elrsSettings && Object.values(aircraft.elrsSettings).some(v => v);
+  const hasComponents = aircraft.components && aircraft.components.length > 0;
 
   return (
     <div className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
@@ -244,6 +260,26 @@ function AircraftCard({ aircraft }: { aircraft: AircraftPublic }) {
         )}
         {aircraft.description && (
           <p className="text-sm text-slate-500 mt-2 line-clamp-2">{aircraft.description}</p>
+        )}
+
+        {/* Components */}
+        {hasComponents && (
+          <div className="mt-3 pt-3 border-t border-slate-700">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-xs font-medium text-slate-400">Components</span>
+            </div>
+            <div className="space-y-1">
+              {aircraft.components?.map((component, idx) => (
+                <div key={idx} className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-500 w-12 shrink-0">{formatCategory(component.category)}</span>
+                  <span className="text-slate-300 truncate">
+                    {component.manufacturer && <span className="text-slate-500">{component.manufacturer} </span>}
+                    {component.name || 'Unspecified'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* ELRS Settings (Sanitized/Safe View) */}

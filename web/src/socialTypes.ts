@@ -40,6 +40,27 @@ export interface ELRSSanitizedSettings {
   rxProtocol?: string;       // Protocol type if applicable
 }
 
+// Component category types
+export type ComponentCategory = 
+  | 'fc' 
+  | 'esc' 
+  | 'elrs_module' 
+  | 'vtx' 
+  | 'motors' 
+  | 'camera' 
+  | 'frame' 
+  | 'propellers' 
+  | 'antenna';
+
+// Public component info (no purchase details)
+// NOTE: Purchase price, seller, and notes are intentionally omitted for privacy
+export interface AircraftComponentPublic {
+  category: ComponentCategory;
+  name?: string;
+  manufacturer?: string;
+  imageUrl?: string;
+}
+
 // Public aircraft info shown on pilot profiles
 export interface AircraftPublic {
   id: string;
@@ -49,6 +70,7 @@ export interface AircraftPublic {
   hasImage: boolean;
   description?: string;
   createdAt: string;
+  components?: AircraftComponentPublic[];
   elrsSettings?: ELRSSanitizedSettings; // Sanitized ELRS data
 }
 

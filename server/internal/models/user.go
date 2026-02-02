@@ -286,9 +286,12 @@ type AircraftPublic struct {
 }
 
 // AircraftComponentPublic represents component info for public view
+// NOTE: Intentionally omits purchase price, seller, notes, and other private details
 type AircraftComponentPublic struct {
-	Category ComponentCategory `json:"category"`
-	Name     string            `json:"name,omitempty"`
+	Category     ComponentCategory `json:"category"`
+	Name         string            `json:"name,omitempty"`
+	Manufacturer string            `json:"manufacturer,omitempty"`
+	ImageURL     string            `json:"imageUrl,omitempty"`
 }
 
 // ELRSSanitizedSettings contains only safe-to-share ELRS configuration

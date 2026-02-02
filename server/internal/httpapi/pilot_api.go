@@ -143,7 +143,7 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 			aircraft = []*models.Aircraft{}
 		}
 
-		// Build public aircraft list with sanitized ELRS data
+		// Build public aircraft list with sanitized ELRS data and components
 		publicAircraft = make([]models.AircraftPublic, 0, len(aircraft))
 		for _, a := range aircraft {
 			aircraftPublic := models.AircraftPublic{
@@ -154,6 +154,25 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 				HasImage:    a.HasImage,
 				Description: a.Description,
 				CreatedAt:   a.CreatedAt,
+			}
+
+			// Get components (sanitized - only public info)
+			components, err := api.aircraftStore.GetComponents(ctx, a.ID)
+			if err == nil && len(components) > 0 {
+				publicComponents := make([]models.AircraftComponentPublic, 0, len(components))
+				for _, c := range components {
+					pc := models.AircraftComponentPublic{
+						Category: c.Category,
+					}
+					// Include inventory item info (sanitized - no purchase details)
+					if c.InventoryItem != nil {
+						pc.Name = c.InventoryItem.Name
+						pc.Manufacturer = c.InventoryItem.Manufacturer
+						pc.ImageURL = c.InventoryItem.ImageURL
+					}
+					publicComponents = append(publicComponents, pc)
+				}
+				aircraftPublic.Components = publicComponents
 			}
 
 			// Only include sanitized ELRS settings for non-owners
