@@ -34,3 +34,4 @@ export { AuthCallback } from './AuthCallback';
 export { MyProfile } from './MyProfile';
 export { PilotSearch } from './PilotSearch';
 export { PilotProfile } from './PilotProfile';
+export { SocialPage } from './SocialPage';

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, PilotSearch, PilotProfile } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
@@ -687,7 +687,7 @@ function App() {
 
         {/* Social/Pilot Directory Section */}
         {activeSection === 'social' && !selectedPilotId && (
-          <PilotSearch
+          <SocialPage
             onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
           />
         )}
@@ -697,6 +697,7 @@ function App() {
           <PilotProfile
             pilotId={selectedPilotId}
             onBack={() => setSelectedPilotId(null)}
+            onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
           />
         )}
       </div>

@@ -4,13 +4,17 @@ import { followPilot, unfollowPilot, getPublicAircraftImageUrl } from '../social
 import type { PilotProfile as PilotProfileType, AircraftPublic } from '../socialTypes';
 import { useAuth } from '../hooks/useAuth';
 import { PublicAircraftModal } from './PublicAircraftModal';
+import { FollowListModal } from './FollowListModal';
+
+type FollowListType = 'followers' | 'following' | null;
 
 interface PilotProfileProps {
   pilotId: string;
   onBack: () => void;
+  onSelectPilot?: (pilotId: string) => void;
 }
 
-export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
+export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfileProps) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<PilotProfileType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -18,6 +22,7 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
   const [selectedAircraft, setSelectedAircraft] = useState<AircraftPublic | null>(null);
+  const [showFollowList, setShowFollowList] = useState<FollowListType>(null);
 
   const isOwnProfile = user?.id === pilotId;
 
@@ -160,9 +165,19 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
             {getSecondaryName() && (
               <p className="text-slate-400">{getSecondaryName()}</p>
             )}
-            <div className="flex items-center gap-4 mt-2 text-sm text-slate-500">
-              <span>{profile.followerCount} followers</span>
-              <span>{profile.followingCount} following</span>
+            <div className="flex items-center gap-4 mt-2 text-sm">
+              <button 
+                onClick={() => setShowFollowList('followers')}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <span className="font-medium text-white">{profile.followerCount}</span> followers
+              </button>
+              <button 
+                onClick={() => setShowFollowList('following')}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <span className="font-medium text-white">{profile.followingCount}</span> following
+              </button>
             </div>
             <p className="text-sm text-slate-500 mt-1">
               Member since {new Date(profile.createdAt).toLocaleDateString()}
@@ -220,6 +235,22 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
         <PublicAircraftModal 
           aircraft={selectedAircraft} 
           onClose={() => setSelectedAircraft(null)} 
+        />
+      )}
+
+      {/* Follow List Modal */}
+      {showFollowList && profile && (
+        <FollowListModal
+          userId={pilotId}
+          userName={getDisplayName()}
+          type={showFollowList}
+          onClose={() => setShowFollowList(null)}
+          onSelectPilot={(newPilotId) => {
+            setShowFollowList(null);
+            if (newPilotId !== pilotId && onSelectPilot) {
+              onSelectPilot(newPilotId);
+            }
+          }}
         />
       )}
     </div>
