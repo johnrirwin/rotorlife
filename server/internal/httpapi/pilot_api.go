@@ -13,19 +13,19 @@ import (
 
 // PilotAPI handles pilot directory HTTP endpoints
 type PilotAPI struct {
-	userStore     *database.UserStore
-	aircraftStore *database.AircraftStore
+	userStore      *database.UserStore
+	aircraftStore  *database.AircraftStore
 	authMiddleware *auth.Middleware
-	logger        *logging.Logger
+	logger         *logging.Logger
 }
 
 // NewPilotAPI creates a new pilot API handler
 func NewPilotAPI(userStore *database.UserStore, aircraftStore *database.AircraftStore, authMiddleware *auth.Middleware, logger *logging.Logger) *PilotAPI {
 	return &PilotAPI{
-		userStore:     userStore,
-		aircraftStore: aircraftStore,
+		userStore:      userStore,
+		aircraftStore:  aircraftStore,
 		authMiddleware: authMiddleware,
-		logger:        logger,
+		logger:         logger,
 	}
 }
 
@@ -96,7 +96,7 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 	// Extract pilot ID from path: /api/pilots/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/api/pilots/")
 	pilotID := strings.TrimSuffix(path, "/")
-	
+
 	if pilotID == "" || pilotID == "search" {
 		// This shouldn't happen as search is handled separately, but just in case
 		http.Error(w, "Pilot ID required", http.StatusBadRequest)

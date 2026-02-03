@@ -198,13 +198,13 @@ type UpdateSocialSettingsParams struct {
 
 // UserProfile represents the public profile response
 type UserProfile struct {
-	ID                 string    `json:"id"`
-	CallSign           string    `json:"callSign,omitempty"`
-	DisplayName        string    `json:"displayName,omitempty"`
-	GoogleName         string    `json:"googleName,omitempty"`
-	EffectiveAvatarURL string    `json:"effectiveAvatarUrl"`
+	ID                 string     `json:"id"`
+	CallSign           string     `json:"callSign,omitempty"`
+	DisplayName        string     `json:"displayName,omitempty"`
+	GoogleName         string     `json:"googleName,omitempty"`
+	EffectiveAvatarURL string     `json:"effectiveAvatarUrl"`
 	AvatarType         AvatarType `json:"avatarType,omitempty"`
-	CreatedAt          time.Time `json:"createdAt"`
+	CreatedAt          time.Time  `json:"createdAt"`
 }
 
 // ToProfile converts a User to a UserProfile (public view)
@@ -245,9 +245,9 @@ type PilotProfile struct {
 	EffectiveAvatarURL string           `json:"effectiveAvatarUrl"`
 	CreatedAt          time.Time        `json:"createdAt"`
 	Aircraft           []AircraftPublic `json:"aircraft"`
-	IsFollowing        bool             `json:"isFollowing"`        // Whether current user follows this pilot
-	FollowerCount      int              `json:"followerCount"`      // Number of followers
-	FollowingCount     int              `json:"followingCount"`     // Number of users this pilot follows
+	IsFollowing        bool             `json:"isFollowing"`    // Whether current user follows this pilot
+	FollowerCount      int              `json:"followerCount"`  // Number of followers
+	FollowingCount     int              `json:"followingCount"` // Number of users this pilot follows
 }
 
 // PilotSummary represents minimal pilot info for follower/following lists

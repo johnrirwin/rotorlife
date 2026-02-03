@@ -25,11 +25,11 @@ const (
 	ComponentCategoryESC      ComponentCategory = "esc"
 	ComponentCategoryReceiver ComponentCategory = "receiver"
 	ComponentCategoryVTX      ComponentCategory = "vtx"
-	ComponentCategoryMotors     ComponentCategory = "motors"
-	ComponentCategoryCamera     ComponentCategory = "camera"
-	ComponentCategoryFrame      ComponentCategory = "frame"
-	ComponentCategoryProps      ComponentCategory = "propellers"
-	ComponentCategoryAntenna    ComponentCategory = "antenna"
+	ComponentCategoryMotors   ComponentCategory = "motors"
+	ComponentCategoryCamera   ComponentCategory = "camera"
+	ComponentCategoryFrame    ComponentCategory = "frame"
+	ComponentCategoryProps    ComponentCategory = "propellers"
+	ComponentCategoryAntenna  ComponentCategory = "antenna"
 )
 
 // Aircraft represents a user's aircraft/drone

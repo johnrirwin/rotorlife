@@ -177,10 +177,10 @@ func TestSanitizeEmptySettings(t *testing.T) {
 // This is a compile-time-like check through reflection.
 func TestReceiverSanitizedSettingsHasNoSensitiveFields(t *testing.T) {
 	sanitized := &ReceiverSanitizedSettings{}
-	
+
 	// Marshal to JSON and check structure
 	jsonBytes, _ := json.Marshal(sanitized)
-	
+
 	// Unmarshal into a map to check field names
 	var fieldMap map[string]interface{}
 	json.Unmarshal(jsonBytes, &fieldMap)
