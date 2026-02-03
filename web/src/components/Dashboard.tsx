@@ -6,7 +6,7 @@ import type { Order } from '../orderTypes';
 import { getAircraftImageUrl } from '../aircraftApi';
 import { getFollowers } from '../socialApi';
 import { getOrders } from '../orderApi';
-import { carrierDisplayNames, statusDisplayNames, statusColors, getCarrierTrackingUrl, isActiveOrder } from '../orderTypes';
+import { carrierDisplayNames, getCarrierTrackingUrl } from '../orderTypes';
 import { useAuth } from '../hooks/useAuth';
 
 interface DashboardProps {
@@ -127,14 +127,10 @@ function DashboardOrderCard({
 }: { 
   order: Order;
 }) {
-  const { bg, text } = statusColors[order.status];
   const trackingUrl = getCarrierTrackingUrl(order.carrier, order.trackingNumber);
-  const isActive = isActiveOrder(order);
 
   return (
-    <div 
-      className={`bg-slate-800 border border-slate-700 rounded-xl p-4 ${isActive ? 'ring-1 ring-primary-500/20' : ''}`}
-    >
+    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
       <div className="flex gap-4">
         <div className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
           <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -148,16 +144,9 @@ function DashboardOrderCard({
           <p className="text-xs text-slate-400 truncate">
             {carrierDisplayNames[order.carrier]} • ****{order.trackingNumber.slice(-4)}
           </p>
-          <div className="flex items-center gap-2 mt-1.5">
-            <span className={`inline-block px-2 py-0.5 ${bg} ${text} rounded text-xs font-medium`}>
-              {statusDisplayNames[order.status]}
-            </span>
-            {order.estimatedDate && order.status !== 'delivered' && (
-              <span className="text-xs text-slate-500">
-                Est. {new Date(order.estimatedDate).toLocaleDateString()}
-              </span>
-            )}
-          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Added {new Date(order.createdAt).toLocaleDateString()}
+          </p>
         </div>
         {trackingUrl && (
           <a

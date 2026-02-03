@@ -2,10 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Order, Carrier, AddOrderParams } from '../orderTypes';
 import { 
   carrierDisplayNames, 
-  statusDisplayNames, 
-  statusColors, 
-  getCarrierTrackingUrl,
-  isActiveOrder 
+  getCarrierTrackingUrl 
 } from '../orderTypes';
 import { getOrders, createOrder, updateOrder, deleteOrder } from '../orderApi';
 
@@ -145,15 +142,11 @@ function OrderCard({
   onArchive: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
-  const { bg, text } = statusColors[order.status];
   const trackingUrl = getCarrierTrackingUrl(order.carrier, order.trackingNumber);
-  const isActive = isActiveOrder(order);
   const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <div 
-      className={`bg-slate-800 border border-slate-700 rounded-xl p-4 ${isActive ? 'ring-1 ring-primary-500/30' : ''}`}
-    >
+    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
       <div className="flex gap-4">
         <div className="w-14 h-14 bg-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
           <svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,27 +206,11 @@ function OrderCard({
             </div>
           </div>
           
-          <div className="flex items-center gap-3 mt-2">
-            <span className={`inline-block px-2.5 py-1 ${bg} ${text} rounded-lg text-xs font-medium`}>
-              {statusDisplayNames[order.status]}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-slate-500">
+              Added {new Date(order.createdAt).toLocaleDateString()}
             </span>
-            
-            {order.estimatedDate && order.status !== 'delivered' && (
-              <span className="text-xs text-slate-400">
-                Est. {new Date(order.estimatedDate).toLocaleDateString()}
-              </span>
-            )}
-            
-            {order.deliveredAt && (
-              <span className="text-xs text-green-400">
-                Delivered {new Date(order.deliveredAt).toLocaleDateString()}
-              </span>
-            )}
           </div>
-          
-          {order.statusDetails && (
-            <p className="text-xs text-slate-500 mt-2">{order.statusDetails}</p>
-          )}
         </div>
         
         {trackingUrl && (
@@ -331,8 +308,7 @@ export function OrdersPage() {
     }
   };
 
-  const activeOrders = orders.filter(o => !o.archived && o.status !== 'delivered');
-  const completedOrders = orders.filter(o => !o.archived && o.status === 'delivered');
+  const activeOrders = orders.filter(o => !o.archived);
   const archivedOrders = orders.filter(o => o.archived);
 
   return (
@@ -392,29 +368,10 @@ export function OrdersPage() {
             {activeOrders.length > 0 && (
               <section>
                 <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">
-                  In Transit ({activeOrders.length})
+                  Tracking ({activeOrders.length})
                 </h2>
                 <div className="space-y-3">
                   {activeOrders.map(order => (
-                    <OrderCard
-                      key={order.id}
-                      order={order}
-                      onArchive={handleArchive}
-                      onDelete={handleDelete}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Completed Orders */}
-            {completedOrders.length > 0 && (
-              <section>
-                <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">
-                  Delivered ({completedOrders.length})
-                </h2>
-                <div className="space-y-3">
-                  {completedOrders.map(order => (
                     <OrderCard
                       key={order.id}
                       order={order}
