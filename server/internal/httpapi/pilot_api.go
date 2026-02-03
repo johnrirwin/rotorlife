@@ -181,7 +181,10 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 			receiverSettings, err := api.aircraftStore.GetReceiverSettings(ctx, a.ID)
 			if err == nil && receiverSettings != nil {
 				// Always sanitize - removes bind phrase, model match, uid etc.
-				aircraftPublic.ReceiverSettings = models.SanitizeReceiverSettings(receiverSettings)
+				sanitized := models.SanitizeReceiverSettings(receiverSettings)
+				aircraftPublic.ReceiverSettings = sanitized
+				// Log that sanitization was performed for observability
+				api.logger.Debug("Sanitized receiver settings for aircraft", logging.WithField("aircraft_id", a.ID))
 			}
 
 			publicAircraft = append(publicAircraft, aircraftPublic)
