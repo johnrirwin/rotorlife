@@ -9,6 +9,7 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/battery"
 	"github.com/johnrirwin/flyingforge/internal/cache"
 	"github.com/johnrirwin/flyingforge/internal/config"
+	"github.com/johnrirwin/flyingforge/internal/crypto"
 	"github.com/johnrirwin/flyingforge/internal/database"
 	"github.com/johnrirwin/flyingforge/internal/equipment"
 	"github.com/johnrirwin/flyingforge/internal/httpapi"
@@ -181,12 +182,21 @@ func (a *App) initDatabaseServices() {
 
 	a.db = db
 
+	// Initialize encryptor for sensitive data
+	encryptor, err := crypto.NewEncryptor(a.Config.Crypto.EncryptionKey)
+	if err != nil {
+		a.Logger.Warn("Failed to initialize encryptor - bind phrases will NOT be encrypted",
+			logging.WithField("error", err.Error()),
+			logging.WithField("hint", "Set BIND_PHRASE_ENCRYPTION_KEY env var to exactly 32 characters"))
+		encryptor = nil
+	}
+
 	// Initialize inventory
 	inventoryStore := database.NewInventoryStore(db)
 	a.InventorySvc = inventory.NewService(inventoryStore, a.Logger)
 
-	// Initialize aircraft
-	a.aircraftStore = database.NewAircraftStore(db)
+	// Initialize aircraft (with encryption support)
+	a.aircraftStore = database.NewAircraftStore(db, encryptor)
 	a.AircraftSvc = aircraft.NewService(a.aircraftStore, a.InventorySvc, a.Logger)
 
 	// Initialize radio
