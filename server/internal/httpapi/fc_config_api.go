@@ -345,7 +345,7 @@ func (api *FCConfigAPI) createTuningSnapshot(w http.ResponseWriter, r *http.Requ
 	userID := auth.GetUserID(r.Context())
 
 	var req struct {
-		RawCLIDump string `json:"raw_cli_dump"`
+		RawCLIDump string `json:"rawCliDump"`
 		Notes      string `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

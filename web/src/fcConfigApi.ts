@@ -8,14 +8,15 @@ import type {
   AircraftTuningSnapshot,
   TuningSnapshotsListResponse,
 } from './fcConfigTypes';
+import { getStoredTokens } from './authApi';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 function getAuthHeaders(): HeadersInit {
-  const token = localStorage.getItem('authToken');
+  const tokens = getStoredTokens();
   return {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(tokens?.accessToken && { Authorization: `Bearer ${tokens.accessToken}` }),
   };
 }
 

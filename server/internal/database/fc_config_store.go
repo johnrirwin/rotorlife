@@ -484,3 +484,60 @@ func (s *FCConfigStore) GetAircraftByFC(ctx context.Context, userID string, inve
 
 	return aircraft, nil
 }
+
+// GetLatestTuningSnapshotPublic gets the most recent tuning snapshot for an aircraft without ownership check
+// Used for public pilot profiles - returns nil if no snapshot exists
+func (s *FCConfigStore) GetLatestTuningSnapshotPublic(ctx context.Context, aircraftID string) (*models.AircraftTuningSnapshot, error) {
+	query := `
+		SELECT ts.id, ts.aircraft_id, ts.flight_controller_id, ts.flight_controller_config_id,
+			   ts.firmware_name, ts.firmware_version, ts.board_target, ts.board_name,
+			   ts.tuning_data, ts.parse_status, ts.parse_warnings, ts.notes,
+			   ts.created_at, ts.updated_at
+		FROM aircraft_tuning_snapshots ts
+		WHERE ts.aircraft_id = $1
+		ORDER BY ts.created_at DESC
+		LIMIT 1
+	`
+
+	snapshot := &models.AircraftTuningSnapshot{}
+	var fcID, configID, firmwareVersion, boardTarget, boardName, notes sql.NullString
+	var tuningData, parseWarnings []byte
+
+	err := s.db.QueryRowContext(ctx, query, aircraftID).Scan(
+		&snapshot.ID,
+		&snapshot.AircraftID,
+		&fcID,
+		&configID,
+		&snapshot.FirmwareName,
+		&firmwareVersion,
+		&boardTarget,
+		&boardName,
+		&tuningData,
+		&snapshot.ParseStatus,
+		&parseWarnings,
+		&notes,
+		&snapshot.CreatedAt,
+		&snapshot.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public tuning snapshot: %w", err)
+	}
+
+	snapshot.FlightControllerID = fcID.String
+	snapshot.FlightControllerConfigID = configID.String
+	snapshot.FirmwareVersion = firmwareVersion.String
+	snapshot.BoardTarget = boardTarget.String
+	snapshot.BoardName = boardName.String
+	snapshot.Notes = notes.String
+	snapshot.TuningData = tuningData
+
+	if len(parseWarnings) > 0 {
+		json.Unmarshal(parseWarnings, &snapshot.ParseWarnings)
+	}
+
+	return snapshot, nil
+}

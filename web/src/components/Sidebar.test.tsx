@@ -37,7 +37,7 @@ const mockInventorySummary: InventorySummary = {
     vtx: 0,
     flight_controllers: 0,
     esc: 0,
-    stacks: 0,
+    aio: 0,
     receivers: 0,
     cameras: 0,
     antennas: 0,
