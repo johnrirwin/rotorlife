@@ -29,14 +29,5 @@ provider "aws" {
   }
 }
 
-# DynamoDB table for Terraform state locking
-resource "aws_dynamodb_table" "terraform_locks" {
-  name         = "flyingforge-terraform-locks"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "LockID"
-
-  attribute {
-    name = "LockID"
-    type = "S"
-  }
-}
+# DynamoDB table for Terraform state locking (imported, not managed)
+# The table was created manually before Terraform init

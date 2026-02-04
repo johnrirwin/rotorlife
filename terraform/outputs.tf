@@ -52,5 +52,5 @@ output "redis_endpoint" {
 
 output "app_url" {
   description = "Application URL"
-  value       = "http://${aws_lb.main.dns_name}"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
 }
