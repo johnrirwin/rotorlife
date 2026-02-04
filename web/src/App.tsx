@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, OrdersPage } from './components';
 import { LoginPage } from './components/LoginPage';
-import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
 import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setReceiverSettings } from './aircraftApi';
@@ -12,7 +11,7 @@ import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
 
-type AuthModal = 'none' | 'login' | 'signup';
+type AuthModal = 'none' | 'login';
 
 
 // Map URL paths to AppSection values
@@ -759,16 +758,9 @@ function App() {
         />
       )}
 
-      {/* Auth Modals */}
+      {/* Auth Modal */}
       {authModal === 'login' && (
         <LoginPage
-          onSwitchToSignup={() => setAuthModal('signup')}
-          onClose={() => setAuthModal('none')}
-        />
-      )}
-      {authModal === 'signup' && (
-        <SignupPage
-          onSwitchToLogin={() => setAuthModal('login')}
           onClose={() => setAuthModal('none')}
         />
       )}

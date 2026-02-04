@@ -36,73 +36,11 @@ func NewAuthAPI(authService *auth.Service, authMiddleware *auth.Middleware, logg
 
 // RegisterRoutes registers auth routes on the given mux
 func (api *AuthAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
-	mux.HandleFunc("/api/auth/signup", corsMiddleware(api.handleSignup))
-	mux.HandleFunc("/api/auth/login", corsMiddleware(api.handleLogin))
 	mux.HandleFunc("/api/auth/google", corsMiddleware(api.handleGoogleLogin))
 	mux.HandleFunc("/api/auth/google/callback", api.handleGoogleCallback)
 	mux.HandleFunc("/api/auth/refresh", corsMiddleware(api.handleRefresh))
 	mux.HandleFunc("/api/auth/logout", corsMiddleware(api.authMiddleware.RequireAuth(api.handleLogout)))
 	mux.HandleFunc("/api/auth/me", corsMiddleware(api.authMiddleware.RequireAuth(api.handleGetMe)))
-}
-
-func (api *AuthAPI) handleSignup(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var params models.SignupParams
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
-		return
-	}
-
-	response, err := api.authService.SignupWithEmail(r.Context(), params)
-	if err != nil {
-		if authErr, ok := err.(*auth.AuthError); ok {
-			status := http.StatusBadRequest
-			if authErr.Code == "user_exists" {
-				status = http.StatusConflict
-			}
-			api.writeError(w, status, authErr.Code, authErr.Message)
-			return
-		}
-		api.logger.Error("Signup failed", logging.WithField("error", err.Error()))
-		api.writeError(w, http.StatusInternalServerError, "internal_error", "signup failed")
-		return
-	}
-
-	api.writeJSON(w, http.StatusCreated, response)
-}
-
-func (api *AuthAPI) handleLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var params models.LoginParams
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
-		return
-	}
-
-	response, err := api.authService.LoginWithEmail(r.Context(), params)
-	if err != nil {
-		if authErr, ok := err.(*auth.AuthError); ok {
-			status := http.StatusUnauthorized
-			if authErr.Code == "account_disabled" {
-				status = http.StatusForbidden
-			}
-			api.writeError(w, status, authErr.Code, authErr.Message)
-			return
-		}
-		api.logger.Error("Login failed", logging.WithField("error", err.Error()))
-		api.writeError(w, http.StatusInternalServerError, "internal_error", "login failed")
-		return
-	}
-
-	api.writeJSON(w, http.StatusOK, response)
 }
 
 func (api *AuthAPI) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
