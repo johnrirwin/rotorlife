@@ -37,6 +37,7 @@ export async function getItems(params?: FilterParams): Promise<AggregatedRespons
   const searchParams = new URLSearchParams();
   
   if (params?.limit) searchParams.set('limit', params.limit.toString());
+  if (params?.offset) searchParams.set('offset', params.offset.toString());
   if (params?.sources?.length) searchParams.set('sources', params.sources.join(','));
   if (params?.sourceType) searchParams.set('sourceType', params.sourceType);
   if (params?.query) searchParams.set('q', params.query);

@@ -72,11 +72,14 @@ function App() {
   const [sources, setSources] = useState<SourceInfo[]>([]);
   const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshCooldown, setRefreshCooldown] = useState(0);
   const cooldownIntervalRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
+  const [currentOffset, setCurrentOffset] = useState(0);
+  const ITEMS_PER_PAGE = 30;
 
   // Equipment state (for search params only)
   const [equipmentSearchParams, setEquipmentSearchParams] = useState<EquipmentSearchParams>({});
@@ -157,15 +160,16 @@ function App() {
       });
   }, []);
 
-  // Load items when filters change
+  // Load items when filters change (reset to first page)
   useEffect(() => {
     const loadItems = async () => {
       setIsLoading(true);
       setError(null);
+      setCurrentOffset(0);
 
       try {
         const params: FilterParams = {
-          limit: 50,
+          limit: ITEMS_PER_PAGE,
           sort: filters.sort,
         };
 
@@ -192,6 +196,7 @@ function App() {
         const response = await getItems(params);
         setItems(response.items || []);
         setTotalCount(response.totalCount || 0);
+        setCurrentOffset(ITEMS_PER_PAGE);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load items');
         setItems([]);
@@ -209,6 +214,51 @@ function App() {
     filters.toDate,
     debouncedQuery,
   ]);
+
+  // Load more items (infinite scroll)
+  const loadMoreItems = useCallback(async () => {
+    if (isLoadingMore || items.length >= totalCount) return;
+    
+    setIsLoadingMore(true);
+
+    try {
+      const params: FilterParams = {
+        limit: ITEMS_PER_PAGE,
+        offset: currentOffset,
+        sort: filters.sort,
+      };
+
+      if (filters.sources.length > 0) {
+        params.sources = filters.sources;
+      }
+
+      if (filters.sourceType !== 'all') {
+        params.sourceType = filters.sourceType;
+      }
+
+      if (debouncedQuery) {
+        params.query = debouncedQuery;
+      }
+
+      if (filters.fromDate) {
+        params.fromDate = filters.fromDate;
+      }
+
+      if (filters.toDate) {
+        params.toDate = filters.toDate;
+      }
+
+      const response = await getItems(params);
+      if (response.items?.length) {
+        setItems(prev => [...prev, ...response.items]);
+        setCurrentOffset(prev => prev + response.items.length);
+      }
+    } catch (err) {
+      console.error('Failed to load more items:', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentOffset, isLoadingMore, items.length, totalCount, filters, debouncedQuery]);
 
   // Load inventory when section becomes active or filters change (also for dashboard)
   useEffect(() => {
@@ -633,6 +683,8 @@ function App() {
               onToDateChange={d => updateFilter('toDate', d)}
               sort={filters.sort}
               onSortChange={s => updateFilter('sort', s)}
+              sourceType={filters.sourceType}
+              onSourceTypeChange={t => updateFilter('sourceType', t)}
               onRefresh={handleRefresh}
               isRefreshing={isRefreshing}
               refreshCooldown={refreshCooldown}
@@ -641,9 +693,11 @@ function App() {
             <FeedList
               items={items}
               sources={sources}
-              isLoading={isLoading}
+              isLoading={isLoading || isLoadingMore}
               error={error}
               onItemClick={setSelectedItem}
+              hasMore={items.length < totalCount}
+              onLoadMore={loadMoreItems}
             />
           </>
         )}

@@ -50,28 +50,32 @@
       "url": "https://www.reddit.com/r/fpv/.rss",
       "type": "reddit",
       "category": "community",
-      "enabled": true
+      "enabled": false,
+      "comment": "Reddit rate limits in production - disabled"
     },
     {
       "name": "r/Multicopter",
       "url": "https://www.reddit.com/r/Multicopter/.rss",
       "type": "reddit",
       "category": "community",
-      "enabled": true
+      "enabled": false,
+      "comment": "Reddit rate limits in production - disabled"
     },
     {
       "name": "r/drones",
       "url": "https://www.reddit.com/r/drones/.rss",
       "type": "reddit",
       "category": "community",
-      "enabled": true
+      "enabled": false,
+      "comment": "Reddit rate limits in production - disabled"
     },
     {
       "name": "r/djimavic",
       "url": "https://www.reddit.com/r/djimavic/.rss",
       "type": "reddit",
       "category": "community",
-      "enabled": true
+      "enabled": false,
+      "comment": "Reddit rate limits in production - disabled"
     },
     {
       "name": "Joshua Bardwell",
