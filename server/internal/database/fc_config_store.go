@@ -282,7 +282,8 @@ func (s *FCConfigStore) DeleteConfig(ctx context.Context, id string, userID stri
 }
 
 // SaveTuningSnapshot creates a new tuning snapshot for an aircraft
-func (s *FCConfigStore) SaveTuningSnapshot(ctx context.Context, snapshot *models.AircraftTuningSnapshot) error {
+// Verifies that the user owns the aircraft before saving
+func (s *FCConfigStore) SaveTuningSnapshot(ctx context.Context, userID string, snapshot *models.AircraftTuningSnapshot) error {
 	tuningData, err := json.Marshal(snapshot.TuningData)
 	if err != nil {
 		return fmt.Errorf("failed to marshal tuning data: %w", err)
@@ -293,12 +294,16 @@ func (s *FCConfigStore) SaveTuningSnapshot(ctx context.Context, snapshot *models
 		parseWarnings = []byte("[]")
 	}
 
+	// Insert only if the user owns the aircraft (enforced via join)
 	query := `
 		INSERT INTO aircraft_tuning_snapshots (
 			aircraft_id, flight_controller_id, flight_controller_config_id,
 			firmware_name, firmware_version, board_target, board_name,
 			tuning_data, parse_status, parse_warnings, notes, diff_backup
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		)
+		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+		FROM aircraft
+		WHERE aircraft.id = $1 AND aircraft.user_id = $13
 		RETURNING id, created_at, updated_at
 	`
 
@@ -315,8 +320,12 @@ func (s *FCConfigStore) SaveTuningSnapshot(ctx context.Context, snapshot *models
 		parseWarnings,
 		nullString(snapshot.Notes),
 		nullString(snapshot.DiffBackup),
+		userID,
 	).Scan(&snapshot.ID, &snapshot.CreatedAt, &snapshot.UpdatedAt)
 
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("aircraft not found or access denied")
+	}
 	if err != nil {
 		return fmt.Errorf("failed to save tuning snapshot: %w", err)
 	}
