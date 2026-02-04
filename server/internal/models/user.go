@@ -20,7 +20,6 @@ type AuthProvider string
 
 const (
 	AuthProviderGoogle AuthProvider = "google"
-	AuthProviderEmail  AuthProvider = "email"
 )
 
 // AvatarType represents which avatar to use
