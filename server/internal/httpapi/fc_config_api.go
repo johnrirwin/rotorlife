@@ -165,7 +165,7 @@ func (api *FCConfigAPI) createFCConfig(w http.ResponseWriter, r *http.Request) {
 	if config.InventoryItemID != "" {
 		aircraft, err := api.fcConfigStore.GetAircraftByFC(ctx, userID, config.InventoryItemID)
 		if err == nil && aircraft != nil {
-			api.createTuningSnapshotFromConfig(ctx, aircraft.ID, config)
+			api.createTuningSnapshotFromConfig(ctx, userID, aircraft.ID, config)
 		}
 	}
 
@@ -385,8 +385,8 @@ func (api *FCConfigAPI) createTuningSnapshot(w http.ResponseWriter, r *http.Requ
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	// Verify user owns the aircraft (the store method does this via join)
-	if err := api.fcConfigStore.SaveTuningSnapshot(ctx, snapshot); err != nil {
+	// Verify user owns the aircraft (enforced via join in SaveTuningSnapshot)
+	if err := api.fcConfigStore.SaveTuningSnapshot(ctx, userID, snapshot); err != nil {
 		api.logger.Error("Failed to save tuning snapshot",
 			logging.WithField("error", err.Error()),
 			logging.WithField("userID", userID),
@@ -399,7 +399,7 @@ func (api *FCConfigAPI) createTuningSnapshot(w http.ResponseWriter, r *http.Requ
 }
 
 // createTuningSnapshotFromConfig creates a tuning snapshot from an existing FC config
-func (api *FCConfigAPI) createTuningSnapshotFromConfig(ctx context.Context, aircraftID string, config *models.FlightControllerConfig) error {
+func (api *FCConfigAPI) createTuningSnapshotFromConfig(ctx context.Context, userID string, aircraftID string, config *models.FlightControllerConfig) error {
 	tuningData, err := json.Marshal(config.ParsedTuning)
 	if err != nil {
 		tuningData = []byte("{}")
@@ -418,7 +418,7 @@ func (api *FCConfigAPI) createTuningSnapshotFromConfig(ctx context.Context, airc
 		Notes:                    "Auto-created from FC config: " + config.Name,
 	}
 
-	return api.fcConfigStore.SaveTuningSnapshot(ctx, snapshot)
+	return api.fcConfigStore.SaveTuningSnapshot(ctx, userID, snapshot)
 }
 
 // writeJSON writes a JSON response
