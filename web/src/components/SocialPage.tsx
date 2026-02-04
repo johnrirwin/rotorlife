@@ -19,6 +19,7 @@ interface CallSignPromptModalProps {
   title?: string;
   subtitle?: string;
   description?: string;
+  initialCallSign?: string;
 }
 
 // Modal component for prompting callsign setup
@@ -28,8 +29,9 @@ export function CallSignPromptModal({
   title = 'Set Your Call Sign',
   subtitle = 'Required to appear in search results',
   description = 'To protect your privacy, you need a call sign to be visible to other pilots in the community. Only your call sign will be shown publicly.',
+  initialCallSign = '',
 }: CallSignPromptModalProps) {
-  const [callSign, setCallSign] = useState('');
+  const [callSign, setCallSign] = useState(initialCallSign);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 

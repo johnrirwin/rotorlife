@@ -91,11 +91,10 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
   const handleSaveCallSignAndFollow = async (callSign: string) => {
     // First save the callsign - let errors propagate to the modal's error handling
     await updateProfile({ callSign });
-    // Only update local state and close modal if backend succeeded
+    // Update local state after backend succeeded
     updateUser({ callSign });
-    setShowCallSignPrompt(false);
     
-    // Now try to follow
+    // Now try to follow - keep modal open until this succeeds
     try {
       setIsFollowLoading(true);
       await followPilot(pilotId);
@@ -104,9 +103,12 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
         setProfile({ ...profile, followerCount: profile.followerCount + 1 });
       }
       trackEvent('social_follow');
+      // Only close modal after entire flow succeeds
+      setShowCallSignPrompt(false);
     } catch (err) {
+      // Re-throw with clearer message since callsign was saved but follow failed
       const message = err instanceof Error ? err.message : 'Failed to follow';
-      setFollowError(message);
+      throw new Error(`Call sign saved! But follow failed: ${message}. Click "Continue" to try again.`);
     } finally {
       setIsFollowLoading(false);
     }
@@ -307,6 +309,7 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
           title="Set Your Call Sign"
           subtitle="Required to follow other pilots"
           description="To follow other pilots in the community, you need to set up your call sign first. This helps build a trusted community where pilots can connect with each other."
+          initialCallSign={user?.callSign || ''}
         />
       )}
     </div>
