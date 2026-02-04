@@ -94,17 +94,24 @@ export interface ParsedTuningPublic {
 
 export interface PIDProfilePublic {
   profileIndex?: number;
-  roll?: { p?: number; i?: number; d?: number; f?: number };
-  pitch?: { p?: number; i?: number; d?: number; f?: number };
-  yaw?: { p?: number; i?: number; d?: number; f?: number };
+  roll?: { p?: number; i?: number; d?: number; ff?: number };
+  pitch?: { p?: number; i?: number; d?: number; ff?: number };
+  yaw?: { p?: number; i?: number; d?: number; ff?: number };
+}
+
+export interface RateAxisValues {
+  roll?: number;
+  pitch?: number;
+  yaw?: number;
 }
 
 export interface RateProfilePublic {
   profileIndex?: number;
-  ratesType?: string;
-  roll?: { rcRate?: number; superRate?: number; rcExpo?: number };
-  pitch?: { rcRate?: number; superRate?: number; rcExpo?: number };
-  yaw?: { rcRate?: number; superRate?: number; rcExpo?: number };
+  rateType?: string;
+  // Backend uses this structure
+  rcRates?: RateAxisValues;
+  superRates?: RateAxisValues;
+  rcExpo?: RateAxisValues;
 }
 
 export interface FilterSettingsPublic {

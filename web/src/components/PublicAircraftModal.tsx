@@ -231,21 +231,21 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
                               <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.roll?.p ?? '-'}</td>
                               <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.roll?.i ?? '-'}</td>
                               <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.roll?.d ?? '-'}</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.roll?.f ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.roll?.ff ?? '-'}</td>
                             </tr>
                             <tr>
                               <td className="py-1 text-slate-300">Pitch</td>
                               <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.pitch?.p ?? '-'}</td>
                               <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.pitch?.i ?? '-'}</td>
                               <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.pitch?.d ?? '-'}</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.pitch?.f ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.pitch?.ff ?? '-'}</td>
                             </tr>
                             <tr>
                               <td className="py-1 text-slate-300">Yaw</td>
                               <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.yaw?.p ?? '-'}</td>
                               <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.yaw?.i ?? '-'}</td>
                               <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.yaw?.d ?? '-'}</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.yaw?.f ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.yaw?.ff ?? '-'}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -253,45 +253,45 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
                     </div>
                   )}
 
-                  {/* Rates Display */}
+                  {/* Rates Display - matches AircraftDetail layout */}
                   {aircraft.tuning?.parsedTuning?.rates && (
                     <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
-                      <h4 className="text-white font-medium mb-3">
-                        Rates
-                        {aircraft.tuning.parsedTuning.rates.ratesType && (
-                          <span className="ml-2 text-xs text-slate-400 font-normal">
-                            ({aircraft.tuning.parsedTuning.rates.ratesType})
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-white font-medium">Rates</h4>
+                        {aircraft.tuning.parsedTuning.rates.rateType && (
+                          <span className="text-xs bg-slate-600 text-slate-300 px-2 py-0.5 rounded">
+                            {aircraft.tuning.parsedTuning.rates.rateType}
                           </span>
                         )}
-                      </h4>
+                      </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="text-slate-400 text-left">
-                              <th className="pb-2">Axis</th>
-                              <th className="pb-2 text-center">RC Rate</th>
-                              <th className="pb-2 text-center">Super Rate</th>
-                              <th className="pb-2 text-center">Expo</th>
+                              <th className="pb-2"></th>
+                              <th className="pb-2 text-center">Roll</th>
+                              <th className="pb-2 text-center">Pitch</th>
+                              <th className="pb-2 text-center">Yaw</th>
                             </tr>
                           </thead>
                           <tbody className="text-white">
                             <tr>
-                              <td className="py-1 text-slate-300">Roll</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.roll?.rcRate ?? '-'}</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.roll?.superRate ?? '-'}</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.roll?.rcExpo ?? '-'}</td>
+                              <td className="py-1 text-slate-300">RC Rate</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcRates?.roll ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcRates?.pitch ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcRates?.yaw ?? '-'}</td>
                             </tr>
                             <tr>
-                              <td className="py-1 text-slate-300">Pitch</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.pitch?.rcRate ?? '-'}</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.pitch?.superRate ?? '-'}</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.pitch?.rcExpo ?? '-'}</td>
+                              <td className="py-1 text-slate-300">Super Rate</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.superRates?.roll ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.superRates?.pitch ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.superRates?.yaw ?? '-'}</td>
                             </tr>
                             <tr>
-                              <td className="py-1 text-slate-300">Yaw</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.yaw?.rcRate ?? '-'}</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.yaw?.superRate ?? '-'}</td>
-                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.yaw?.rcExpo ?? '-'}</td>
+                              <td className="py-1 text-slate-300">RC Expo</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcExpo?.roll ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcExpo?.pitch ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcExpo?.yaw ?? '-'}</td>
                             </tr>
                           </tbody>
                         </table>
