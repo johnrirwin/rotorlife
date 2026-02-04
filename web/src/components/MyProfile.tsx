@@ -34,9 +34,10 @@ export function MyProfile() {
 
   // Cleanup pending avatar preview URL on unmount or state change
   useEffect(() => {
+    const avatarToCleanup = pendingAvatar;
     return () => {
-      if (pendingAvatar) {
-        URL.revokeObjectURL(pendingAvatar.previewUrl);
+      if (avatarToCleanup) {
+        URL.revokeObjectURL(avatarToCleanup.previewUrl);
       }
     };
   }, [pendingAvatar]);
