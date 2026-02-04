@@ -70,20 +70,19 @@ function initGA() {
 export function trackPageView(path: string, title?: string) {
   if (!GA_MEASUREMENT_ID) return;
 
-  const eventArgs = [
-    'event',
-    'page_view',
-    {
+  // gtag function is created during initGA and pushes to dataLayer,
+  // which GA will process once the script loads
+  if (window.gtag) {
+    window.gtag('event', 'page_view', {
       page_path: path,
       page_title: title || document.title,
-    },
-  ];
-
-  // If GA is ready, send immediately; otherwise queue
-  if (isGAReady && window.gtag) {
-    window.gtag(...eventArgs);
+    });
   } else {
-    eventQueue.push({ type: 'page_view', args: eventArgs });
+    // Queue for when GA initializes
+    eventQueue.push({
+      type: 'page_view',
+      args: ['event', 'page_view', { page_path: path, page_title: title || document.title }],
+    });
   }
 }
 
@@ -94,13 +93,10 @@ export function trackEvent(
 ) {
   if (!GA_MEASUREMENT_ID) return;
 
-  const eventArgs = ['event', eventName, params];
-
-  // If GA is ready, send immediately; otherwise queue
-  if (isGAReady && window.gtag) {
-    window.gtag(...eventArgs);
+  if (window.gtag) {
+    window.gtag('event', eventName, params);
   } else {
-    eventQueue.push({ type: 'event', args: eventArgs });
+    eventQueue.push({ type: 'event', args: ['event', eventName, params] });
   }
 }
 
