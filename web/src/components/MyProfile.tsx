@@ -97,17 +97,21 @@ export function MyProfile() {
       if (pendingAvatar) {
         const avatarResult = await uploadAvatar(pendingAvatar.file);
         
+        // Use effectiveAvatar if available, otherwise fall back to avatarUrl
+        const newAvatarUrl = avatarResult.effectiveAvatar || avatarResult.avatarUrl;
+        
         // Update local state
         setProfile(prev => prev ? {
           ...prev,
-          avatarUrl: avatarResult.avatarUrl,
-          effectiveAvatarUrl: avatarResult.avatarUrl,
+          customAvatarUrl: avatarResult.avatarUrl,
+          avatarType: avatarResult.avatarType || 'custom',
+          effectiveAvatarUrl: newAvatarUrl,
         } : null);
         
         // Update auth context so sidebar updates
         if (updateUser) {
           updateUser({
-            avatarUrl: avatarResult.avatarUrl,
+            avatarUrl: newAvatarUrl,
           });
         }
         

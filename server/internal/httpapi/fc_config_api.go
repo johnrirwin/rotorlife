@@ -368,12 +368,41 @@ func (api *FCConfigAPI) createTuningSnapshot(w http.ResponseWriter, r *http.Requ
 	userID := auth.GetUserID(r.Context())
 
 	var req struct {
-		RawCLIDump string `json:"rawCliDump"`
-		DiffBackup string `json:"diffBackup"`
-		Notes      string `json:"notes"`
+		RawCLIDump             string `json:"rawCliDump"`
+		DiffBackup             string `json:"diffBackup"`
+		Notes                  string `json:"notes"`
+		PreserveExistingBackup bool   `json:"preserveExistingBackup"`
+		DiffBackupOnly         bool   `json:"diffBackupOnly"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	// If diffBackupOnly, just update the existing snapshot's diff backup
+	if req.DiffBackupOnly {
+		if req.DiffBackup == "" {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Diff backup is required when using diffBackupOnly mode"})
+			return
+		}
+		if err := api.fcConfigStore.UpdateLatestSnapshotDiffBackup(ctx, userID, aircraftID, req.DiffBackup); err != nil {
+			api.logger.Error("Failed to update diff backup",
+				logging.WithField("error", err.Error()),
+				logging.WithField("userID", userID),
+			)
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update diff backup"})
+			return
+		}
+		// Return the updated snapshot
+		snapshot, err := api.fcConfigStore.GetLatestTuningSnapshot(ctx, aircraftID, userID)
+		if err != nil {
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to get updated snapshot"})
+			return
+		}
+		api.writeJSON(w, http.StatusOK, snapshot)
 		return
 	}
 
@@ -390,6 +419,16 @@ func (api *FCConfigAPI) createTuningSnapshot(w http.ResponseWriter, r *http.Requ
 		tuningData = []byte("{}")
 	}
 
+	// Check if we should preserve the existing diff backup
+	diffBackupToUse := req.DiffBackup
+	if req.PreserveExistingBackup && diffBackupToUse == "" {
+		// Get existing snapshot to preserve its diff backup
+		existingSnapshot, err := api.fcConfigStore.GetLatestTuningSnapshot(ctx, aircraftID, userID)
+		if err == nil && existingSnapshot != nil && existingSnapshot.DiffBackup != "" {
+			diffBackupToUse = existingSnapshot.DiffBackup
+		}
+	}
+
 	snapshot := &models.AircraftTuningSnapshot{
 		AircraftID:      aircraftID,
 		FirmwareName:    result.FirmwareName,
@@ -399,12 +438,9 @@ func (api *FCConfigAPI) createTuningSnapshot(w http.ResponseWriter, r *http.Requ
 		TuningData:      tuningData,
 		ParseStatus:     result.ParseStatus,
 		ParseWarnings:   result.ParseWarnings,
-		DiffBackup:      req.DiffBackup,
+		DiffBackup:      diffBackupToUse,
 		Notes:           req.Notes,
 	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
 
 	// Verify user owns the aircraft (enforced via join in SaveTuningSnapshot)
 	if err := api.fcConfigStore.SaveTuningSnapshot(ctx, userID, snapshot); err != nil {

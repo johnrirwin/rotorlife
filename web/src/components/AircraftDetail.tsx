@@ -50,6 +50,7 @@ export function AircraftDetail({
   const [cliDump, setCliDump] = useState('');
   const [diffBackup, setDiffBackup] = useState('');
   const [isUploadingTuning, setIsUploadingTuning] = useState(false);
+  const [uploadMode, setUploadMode] = useState<'dump' | 'backup'>('dump');
 
   const { aircraft, components } = details;
   const aircraftType = AIRCRAFT_TYPES.find(t => t.value === aircraft.type);
@@ -90,22 +91,36 @@ export function AircraftDetail({
   };
 
   const handleUploadTuning = async () => {
-    if (!cliDump.trim()) return;
+    // Validate based on mode
+    if (uploadMode === 'dump' && !cliDump.trim()) return;
+    if (uploadMode === 'backup' && !diffBackup.trim()) return;
+    
     setIsUploadingTuning(true);
     try {
-      await createTuningSnapshot(aircraft.id, { 
-        rawCliDump: cliDump,
-        diffBackup: diffBackup.trim() || undefined,
-      });
+      if (uploadMode === 'backup') {
+        // Diff backup only mode - update existing or create new with just backup
+        await createTuningSnapshot(aircraft.id, { 
+          diffBackup: diffBackup.trim(),
+          diffBackupOnly: tuningData?.hasTuning ? true : false,
+        });
+      } else {
+        // Dump mode
+        await createTuningSnapshot(aircraft.id, { 
+          rawCliDump: cliDump,
+        });
+      }
       setCliDump('');
       setDiffBackup('');
       setShowCliUpload(false);
+      setUploadMode('dump');
       // Reload tuning data
       const data = await getAircraftTuning(aircraft.id);
       setTuningData(data);
     } catch (err) {
       console.error('Failed to upload tuning:', err);
-      alert('Failed to upload tuning data. Please check the CLI dump format.');
+      alert(uploadMode === 'backup' 
+        ? 'Failed to update backup.' 
+        : 'Failed to upload tuning data. Please check the CLI dump format.');
     } finally {
       setIsUploadingTuning(false);
     }
@@ -532,6 +547,8 @@ export function AircraftDetail({
               setDiffBackup={setDiffBackup}
               isUploading={isUploadingTuning}
               onUpload={handleUploadTuning}
+              uploadMode={uploadMode}
+              setUploadMode={setUploadMode}
             />
           )}
         </div>
@@ -604,6 +621,8 @@ interface TuningTabContentProps {
   setDiffBackup: (backup: string) => void;
   isUploading: boolean;
   onUpload: () => void;
+  uploadMode: 'dump' | 'backup';
+  setUploadMode: (mode: 'dump' | 'backup') => void;
 }
 
 function TuningTabContent({
@@ -618,6 +637,8 @@ function TuningTabContent({
   setDiffBackup,
   isUploading,
   onUpload,
+  uploadMode,
+  setUploadMode,
 }: TuningTabContentProps) {
   const handleDownloadBackup = () => {
     if (!tuningData?.diffBackup) return;
@@ -645,10 +666,15 @@ function TuningTabContent({
   }
 
   if (showCliUpload) {
+    const isInitialUpload = !tuningData?.hasTuning;
+    const title = isInitialUpload 
+      ? 'Upload Tuning Data' 
+      : (uploadMode === 'dump' ? 'Update Tuning' : 'Update Backup');
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h4 className="text-white font-medium">Upload CLI Dump</h4>
+          <h4 className="text-white font-medium">{title}</h4>
           <button
             onClick={() => setShowCliUpload(false)}
             className="text-slate-400 hover:text-white transition-colors"
@@ -657,30 +683,61 @@ function TuningTabContent({
           </button>
         </div>
         <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4 space-y-4">
-          <div>
-            <p className="text-sm text-slate-300 mb-2">
-              <strong>Step 1:</strong> Paste your full CLI dump below. Run <code className="bg-slate-600 px-1 rounded">dump</code> in the CLI tab to get this.
-            </p>
-            <textarea
-              value={cliDump}
-              onChange={(e) => setCliDump(e.target.value)}
-              placeholder="Paste your CLI dump here..."
-              rows={8}
-              className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-primary-500"
-            />
-          </div>
-          <div>
-            <p className="text-sm text-slate-300 mb-2">
-              <strong>Step 2 (Optional):</strong> Paste your diff backup below for easy restore. Run <code className="bg-slate-600 px-1 rounded">diff all</code> in the CLI tab.
-            </p>
-            <textarea
-              value={diffBackup}
-              onChange={(e) => setDiffBackup(e.target.value)}
-              placeholder="Paste your diff all output here (optional)..."
-              rows={6}
-              className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-primary-500"
-            />
-          </div>
+          {/* Mode selector - show on initial upload OR when updating */}
+          {isInitialUpload && (
+            <div className="flex gap-2 p-1 bg-slate-600/50 rounded-lg w-fit">
+              <button
+                onClick={() => setUploadMode('dump')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  uploadMode === 'dump' 
+                    ? 'bg-primary-600 text-white' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                CLI Dump
+              </button>
+              <button
+                onClick={() => setUploadMode('backup')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  uploadMode === 'backup' 
+                    ? 'bg-primary-600 text-white' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Diff Backup
+              </button>
+            </div>
+          )}
+
+          {uploadMode === 'dump' ? (
+            <div>
+              <p className="text-sm text-slate-300 mb-2">
+                Paste your full CLI dump below. Run <code className="bg-slate-600 px-1 rounded">dump</code> in the Betaflight CLI tab to get this.
+              </p>
+              <textarea
+                value={cliDump}
+                onChange={(e) => setCliDump(e.target.value)}
+                placeholder="Paste your CLI dump here..."
+                rows={10}
+                className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-slate-300 mb-2">
+                Paste your diff backup below. Run <code className="bg-slate-600 px-1 rounded">diff all</code> in the Betaflight CLI tab.
+                {!isInitialUpload && ' This will update only the backup without changing your tuning data.'}
+              </p>
+              <textarea
+                value={diffBackup}
+                onChange={(e) => setDiffBackup(e.target.value)}
+                placeholder="Paste your diff all output here..."
+                rows={10}
+                className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+          )}
+
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowCliUpload(false)}
@@ -690,16 +747,16 @@ function TuningTabContent({
             </button>
             <button
               onClick={onUpload}
-              disabled={isUploading || !cliDump.trim()}
+              disabled={isUploading || (uploadMode === 'dump' ? !cliDump.trim() : !diffBackup.trim())}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-600/50 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
             >
               {isUploading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
-                  Parsing...
+                  {uploadMode === 'dump' ? 'Parsing...' : 'Saving...'}
                 </>
               ) : (
-                'Upload & Parse'
+                uploadMode === 'dump' ? 'Upload & Parse' : 'Save Backup'
               )}
             </button>
           </div>
@@ -714,13 +771,13 @@ function TuningTabContent({
         <div className="text-4xl mb-4">🎛️</div>
         <h4 className="text-white font-medium mb-2">No Tuning Data</h4>
         <p className="text-slate-400 text-sm mb-6">
-          Upload a Betaflight CLI dump to view and track your tuning settings.
+          Upload a CLI dump to view tuning settings, or a diff backup for easy restore.
         </p>
         <button
-          onClick={() => setShowCliUpload(true)}
+          onClick={() => { setUploadMode('dump'); setShowCliUpload(true); }}
           className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
         >
-          Upload CLI Dump
+          Upload Tuning Data
         </button>
       </div>
     );
@@ -759,7 +816,13 @@ function TuningTabContent({
             </button>
           )}
           <button
-            onClick={() => setShowCliUpload(true)}
+            onClick={() => { setUploadMode('backup'); setShowCliUpload(true); }}
+            className="text-sm text-slate-400 hover:text-slate-300 transition-colors"
+          >
+            Update Backup
+          </button>
+          <button
+            onClick={() => { setUploadMode('dump'); setShowCliUpload(true); }}
             className="text-sm text-primary-400 hover:text-primary-300 transition-colors"
           >
             Update Tuning

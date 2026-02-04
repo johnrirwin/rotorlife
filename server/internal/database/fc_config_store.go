@@ -394,6 +394,38 @@ func (s *FCConfigStore) GetLatestTuningSnapshot(ctx context.Context, aircraftID 
 	return snapshot, nil
 }
 
+// UpdateLatestSnapshotDiffBackup updates the diff_backup of the most recent tuning snapshot for an aircraft
+func (s *FCConfigStore) UpdateLatestSnapshotDiffBackup(ctx context.Context, userID, aircraftID, diffBackup string) error {
+	query := `
+		UPDATE aircraft_tuning_snapshots
+		SET diff_backup = $1, updated_at = NOW()
+		WHERE id = (
+			SELECT ts.id
+			FROM aircraft_tuning_snapshots ts
+			INNER JOIN aircraft a ON a.id = ts.aircraft_id
+			WHERE ts.aircraft_id = $2 AND a.user_id = $3
+			ORDER BY ts.created_at DESC
+			LIMIT 1
+		)
+	`
+
+	result, err := s.db.ExecContext(ctx, query, diffBackup, aircraftID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update diff backup: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no tuning snapshot found to update")
+	}
+
+	return nil
+}
+
 // ListTuningSnapshots lists all tuning snapshots for an aircraft
 func (s *FCConfigStore) ListTuningSnapshots(ctx context.Context, aircraftID string, userID string) ([]models.AircraftTuningSnapshot, error) {
 	query := `

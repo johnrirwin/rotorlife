@@ -265,9 +265,10 @@ export interface AircraftTuningResponse {
 }
 
 export interface CreateTuningSnapshotParams {
-  rawCliDump: string;
+  rawCliDump?: string;
   diffBackup?: string;
   notes?: string;
+  diffBackupOnly?: boolean;
 }
 
 export interface TuningSnapshotsListResponse {
