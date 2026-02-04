@@ -11,6 +11,10 @@ declare global {
 
 const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
 
+// Delay before tracking page view to allow React to update document.title
+// after route changes. This ensures we capture the correct page title.
+const PAGE_TITLE_UPDATE_DELAY_MS = 100;
+
 // Initialize Google Analytics
 function initGA() {
   if (!GA_MEASUREMENT_ID || typeof window === 'undefined') return;
@@ -69,10 +73,9 @@ export function useGoogleAnalytics() {
   useEffect(() => {
     if (!GA_MEASUREMENT_ID) return;
 
-    // Small delay to allow page title to update
     const timeoutId = setTimeout(() => {
       trackPageView(location.pathname + location.search);
-    }, 100);
+    }, PAGE_TITLE_UPDATE_DELAY_MS);
 
     return () => clearTimeout(timeoutId);
   }, [location.pathname, location.search]);
