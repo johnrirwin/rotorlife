@@ -147,7 +147,7 @@ func (a *App) initCache() cache.Cache {
 
 func (a *App) initFetchers(limiter *ratelimit.Limiter) []sources.Fetcher {
 	fetcherConfig := sources.DefaultConfig()
-	
+
 	// Try to load feeds from config file
 	configPath := sources.FindFeedsConfig()
 	if configPath != "" {
@@ -167,7 +167,7 @@ func (a *App) initFetchers(limiter *ratelimit.Limiter) []sources.Fetcher {
 	} else {
 		a.Logger.Info("No feeds.json found, using default sources")
 	}
-	
+
 	// Fallback to default config
 	defaultConfig := sources.GetDefaultFeedsConfig()
 	return sources.CreateFetchersFromConfig(defaultConfig, limiter, fetcherConfig)

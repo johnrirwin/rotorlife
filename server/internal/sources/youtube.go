@@ -42,7 +42,7 @@ func (f *YouTubeFetcher) SourceInfo() models.SourceInfo {
 	// Extract channel ID from URL for unique ID
 	channelID := extractChannelID(f.url)
 	sourceID := strings.ToLower(strings.ReplaceAll(f.name, " ", "-"))
-	
+
 	return models.SourceInfo{
 		ID:          "yt-" + sourceID,
 		Name:        f.name,
@@ -154,7 +154,7 @@ func truncateSummary(s string, maxLen int) string {
 	re := regexp.MustCompile(`<[^>]*>`)
 	s = re.ReplaceAllString(s, "")
 	s = strings.TrimSpace(s)
-	
+
 	if len(s) <= maxLen {
 		return s
 	}

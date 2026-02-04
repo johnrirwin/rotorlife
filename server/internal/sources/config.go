@@ -44,12 +44,12 @@ func LoadFeedsConfig(configPath string) (*FeedsConfig, error) {
 func FindFeedsConfig() string {
 	// Check common locations in order of priority
 	locations := []string{
-		"feeds.json",           // Current directory
-		"./feeds.json",         // Explicit current directory
-		"../feeds.json",        // Parent directory (for running from cmd/server)
-		"/app/feeds.json",      // Docker container path
-		"server/feeds.json",    // Project root
-		"config/feeds.json",    // Config subdirectory
+		"feeds.json",        // Current directory
+		"./feeds.json",      // Explicit current directory
+		"../feeds.json",     // Parent directory (for running from cmd/server)
+		"/app/feeds.json",   // Docker container path
+		"server/feeds.json", // Project root
+		"config/feeds.json", // Config subdirectory
 	}
 
 	// Also check FEEDS_CONFIG_PATH environment variable
@@ -105,12 +105,12 @@ func extractSubreddit(url, fallbackName string) string {
 	if len(matches) > 1 {
 		return matches[1]
 	}
-	
+
 	// Fallback: try to get from name like "r/fpv"
 	if strings.HasPrefix(fallbackName, "r/") {
 		return strings.TrimPrefix(fallbackName, "r/")
 	}
-	
+
 	return fallbackName
 }
 
