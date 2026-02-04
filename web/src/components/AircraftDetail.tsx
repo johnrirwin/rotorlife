@@ -901,21 +901,21 @@ function RatesDisplay({ rates }: { rates: RateProfile }) {
           <tbody className="text-white">
             <tr>
               <td className="py-1 text-slate-300">RC Rate</td>
-              <td className="py-1 text-center font-mono">{rates.rcRates?.roll || '-'}</td>
-              <td className="py-1 text-center font-mono">{rates.rcRates?.pitch || '-'}</td>
-              <td className="py-1 text-center font-mono">{rates.rcRates?.yaw || '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcRates?.roll ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcRates?.pitch ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcRates?.yaw ?? '-'}</td>
             </tr>
             <tr>
               <td className="py-1 text-slate-300">Super Rate</td>
-              <td className="py-1 text-center font-mono">{rates.superRates?.roll || '-'}</td>
-              <td className="py-1 text-center font-mono">{rates.superRates?.pitch || '-'}</td>
-              <td className="py-1 text-center font-mono">{rates.superRates?.yaw || '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.superRates?.roll ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.superRates?.pitch ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.superRates?.yaw ?? '-'}</td>
             </tr>
             <tr>
               <td className="py-1 text-slate-300">RC Expo</td>
-              <td className="py-1 text-center font-mono">{rates.rcExpo?.roll || '-'}</td>
-              <td className="py-1 text-center font-mono">{rates.rcExpo?.pitch || '-'}</td>
-              <td className="py-1 text-center font-mono">{rates.rcExpo?.yaw || '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcExpo?.roll ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcExpo?.pitch ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcExpo?.yaw ?? '-'}</td>
             </tr>
           </tbody>
         </table>
