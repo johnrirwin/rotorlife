@@ -102,7 +102,7 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
 
   if (!isOpen) return null;
 
-  const title = editItem ? 'Edit Inventory Item' : equipmentItem ? 'Add to My Gear' : 'Add New Item';
+  const title = editItem ? 'Edit Inventory Item' : equipmentItem ? 'Add to My Inventory' : 'Add New Item';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

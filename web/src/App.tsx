@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddGearModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddGearModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, GearCatalogPage } from './components';
 import { LoginPage } from './components/LoginPage';
 import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
@@ -11,6 +11,7 @@ import { useGoogleAnalytics, trackEvent } from './hooks/useGoogleAnalytics';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
+import type { GearCatalogItem } from './gearCatalogTypes';
 
 type AuthModal = 'none' | 'login';
 
@@ -22,6 +23,7 @@ const pathToSection: Record<string, AppSection> = {
   '/dashboard': 'dashboard',
   '/news': 'news',
   '/shop': 'equipment',
+  '/gear-catalog': 'gear-catalog',
   '/inventory': 'inventory',
   '/aircraft': 'aircraft',
   '/radio': 'radio',
@@ -36,6 +38,7 @@ const sectionToPath: Record<AppSection, string> = {
   'dashboard': '/dashboard',
   'news': '/news',
   'equipment': '/shop',
+  'gear-catalog': '/gear-catalog',
   'inventory': '/inventory',
   'aircraft': '/aircraft',
   'radio': '/radio',
@@ -100,6 +103,7 @@ function App() {
   // Modal state
   const [showAddInventoryModal, setShowAddInventoryModal] = useState(false);
   const [selectedEquipmentForInventory, setSelectedEquipmentForInventory] = useState<EquipmentItem | null>(null);
+  const [selectedCatalogItemForInventory, setSelectedCatalogItemForInventory] = useState<GearCatalogItem | null>(null);
   const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
 
   // Aircraft state
@@ -733,12 +737,25 @@ function App() {
           <ShopSection />
         )}
 
+        {/* Gear Catalog Section - Public browsable catalog like PCPartPicker */}
+        {activeSection === 'gear-catalog' && (
+          <GearCatalogPage 
+            onAddToInventory={(catalogItem) => {
+              // When user clicks add on a catalog item, open the add gear modal with it selected
+              setSelectedEquipmentForInventory(null);
+              setSelectedCatalogItemForInventory(catalogItem);
+              setEditingInventoryItem(null);
+              setShowAddInventoryModal(true);
+            }}
+          />
+        )}
+
         {/* Inventory Section */}
         {activeSection === 'inventory' && (
           <>
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
               <div>
-                <h1 className="text-xl font-semibold text-white">My Gear</h1>
+                <h1 className="text-xl font-semibold text-white">My Inventory</h1>
                 <p className="text-sm text-slate-400">
                   Track your drone equipment inventory
                 </p>
@@ -857,10 +874,12 @@ function App() {
         onClose={() => {
           setShowAddInventoryModal(false);
           setSelectedEquipmentForInventory(null);
+          setSelectedCatalogItemForInventory(null);
           setEditingInventoryItem(null);
         }}
         onSubmit={handleInventorySubmit}
         equipmentItem={selectedEquipmentForInventory}
+        catalogItem={selectedCatalogItemForInventory}
         editItem={editingInventoryItem}
       />
 

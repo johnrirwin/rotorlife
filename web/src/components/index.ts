@@ -11,6 +11,7 @@ export { AddInventoryModal } from './AddInventoryModal';
 export { AddGearModal } from './AddGearModal';
 export { CatalogSearchModal } from './CatalogSearchModal';
 export { ShopSection } from './ShopSection';
+export { GearCatalogPage } from './GearCatalogPage';
 
 // Aircraft components
 export { AircraftCard } from './AircraftCard';

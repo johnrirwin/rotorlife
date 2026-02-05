@@ -191,7 +191,7 @@ export interface InventorySummary {
 }
 
 // App section navigation
-export type AppSection = 'home' | 'getting-started' | 'dashboard' | 'news' | 'equipment' | 'inventory' | 'aircraft' | 'radio' | 'batteries' | 'social' | 'profile' | 'pilot-profile';
+export type AppSection = 'home' | 'getting-started' | 'dashboard' | 'news' | 'equipment' | 'gear-catalog' | 'inventory' | 'aircraft' | 'radio' | 'batteries' | 'social' | 'profile' | 'pilot-profile';
 
 export const APP_SECTIONS: { value: AppSection; label: string; icon: string; requiresAuth?: boolean }[] = [
   { value: 'home', label: 'Home', icon: '🏠' },
@@ -199,7 +199,8 @@ export const APP_SECTIONS: { value: AppSection; label: string; icon: string; req
   { value: 'dashboard', label: 'Dashboard', icon: '📊', requiresAuth: true },
   { value: 'news', label: 'News', icon: '📰' },
   { value: 'equipment', label: 'Equipment', icon: '🛒' },
-  { value: 'inventory', label: 'My Gear', icon: '🎒', requiresAuth: true },
+  { value: 'gear-catalog', label: 'Gear Catalog', icon: '📦' },
+  { value: 'inventory', label: 'My Inventory', icon: '🎒', requiresAuth: true },
   { value: 'aircraft', label: 'My Aircraft', icon: '🚁', requiresAuth: true },
   { value: 'radio', label: 'My Radio', icon: '📻', requiresAuth: true },
   { value: 'batteries', label: 'Batteries', icon: '🔋', requiresAuth: true },

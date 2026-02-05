@@ -415,14 +415,14 @@ export function Dashboard({
             </div>
           </section>
 
-          {/* My Gear */}
+          {/* My Inventory */}
           <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-4 md:p-5">
             <div className="flex items-center justify-between mb-3 md:mb-4">
               <h2 className="text-base md:text-lg font-semibold text-white flex items-center gap-2">
                 <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
-                My Gear
+                My Inventory
               </h2>
               <button
                 onClick={onViewAllGear}

@@ -12,16 +12,18 @@ interface AddGearModalProps {
   onClose: () => void;
   onSubmit: (params: AddInventoryParams) => Promise<void>;
   equipmentItem?: EquipmentItem | null;
+  catalogItem?: GearCatalogItem | null; // Pre-selected from gear catalog page
   editItem?: InventoryItem | null;
 }
 
-export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, editItem }: AddGearModalProps) {
+export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalogItem, editItem }: AddGearModalProps) {
   // Determine if we should show catalog search or go straight to details
   const isEditing = !!editItem;
   const hasEquipmentItem = !!equipmentItem;
+  const hasPreselectedCatalogItem = !!catalogItem;
   
-  const [step, setStep] = useState<AddGearStep>(isEditing || hasEquipmentItem ? 'details' : 'search');
-  const [selectedCatalogItem, setSelectedCatalogItem] = useState<GearCatalogItem | null>(null);
+  const [step, setStep] = useState<AddGearStep>(isEditing || hasEquipmentItem || hasPreselectedCatalogItem ? 'details' : 'search');
+  const [selectedCatalogItem, setSelectedCatalogItem] = useState<GearCatalogItem | null>(catalogItem || null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,10 +44,10 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, editIte
   // Reset step when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      setStep(isEditing || hasEquipmentItem ? 'details' : 'search');
-      setSelectedCatalogItem(null);
+      setStep(isEditing || hasEquipmentItem || hasPreselectedCatalogItem ? 'details' : 'search');
+      setSelectedCatalogItem(catalogItem || null);
     }
-  }, [isOpen, isEditing, hasEquipmentItem]);
+  }, [isOpen, isEditing, hasEquipmentItem, hasPreselectedCatalogItem, catalogItem]);
 
   // Pre-fill from various sources
   useEffect(() => {
@@ -156,9 +158,9 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, editIte
   const title = editItem 
     ? 'Edit Inventory Item' 
     : selectedCatalogItem 
-      ? 'Add to My Gear' 
+      ? 'Add to My Inventory' 
       : equipmentItem 
-        ? 'Add to My Gear' 
+        ? 'Add to My Inventory' 
         : 'Add New Item';
 
   return (
@@ -431,7 +433,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, editIte
               {isSubmitting && (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               )}
-              {editItem ? 'Save Changes' : 'Add to My Gear'}
+              {editItem ? 'Save Changes' : 'Add to My Inventory'}
             </button>
           </div>
         </form>
