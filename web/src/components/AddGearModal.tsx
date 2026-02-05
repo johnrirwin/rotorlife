@@ -1,20 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { EquipmentItem, InventoryItem, EquipmentCategory, ItemCondition, AddInventoryParams } from '../equipmentTypes';
 import { EQUIPMENT_CATEGORIES, ITEM_CONDITIONS } from '../equipmentTypes';
+import type { GearCatalogItem } from '../gearCatalogTypes';
+import { getCatalogItemDisplayName, gearTypeToEquipmentCategory } from '../gearCatalogTypes';
+import { CatalogSearchModal } from './CatalogSearchModal';
 
-interface AddInventoryModalProps {
+interface AddGearModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (params: AddInventoryParams) => Promise<void>;
   equipmentItem?: EquipmentItem | null;
+  catalogItem?: GearCatalogItem | null; // Pre-selected from gear catalog page
   editItem?: InventoryItem | null;
 }
 
-export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, editItem }: AddInventoryModalProps) {
+export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalogItem, editItem }: AddGearModalProps) {
+  // Only show details form for editing existing items or when coming from shop
+  const isEditing = !!editItem;
+  const hasEquipmentItem = !!equipmentItem;
+  const hasPreselectedCatalogItem = !!catalogItem;
+  
+  // If we have a pre-selected catalog item, auto-add it
+  const showDetailsForm = isEditing || hasEquipmentItem;
+  const showCatalogSearch = !showDetailsForm && !hasPreselectedCatalogItem;
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Form state
+  // Form state (for editing/equipment items)
   const [name, setName] = useState('');
   const [category, setCategory] = useState<EquipmentCategory>('accessories');
   const [manufacturer, setManufacturer] = useState('');
@@ -27,7 +40,49 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
   const [buildId, setBuildId] = useState('');
   const [imageUrl, setImageUrl] = useState('');
 
-  // Pre-fill from equipment item or edit item
+  // Auto-add pre-selected catalog item to inventory
+  const autoAddCatalogItem = useCallback(async (item: GearCatalogItem) => {
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      const params: AddInventoryParams = {
+        name: getCatalogItemDisplayName(item),
+        category: gearTypeToEquipmentCategory(item.gearType),
+        manufacturer: item.brand,
+        quantity: 1,
+        condition: 'new',
+        purchasePrice: item.msrp,
+        imageUrl: item.imageUrl,
+        catalogId: item.id,
+      };
+
+      console.log('[AddGearModal] Auto-adding catalog item:', params);
+      await onSubmit(params);
+      console.log('[AddGearModal] Auto-add successful');
+      onClose();
+    } catch (err) {
+      console.error('[AddGearModal] Auto-add failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add item');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [onSubmit, onClose]);
+
+  // Auto-add pre-selected catalog item when modal opens
+  useEffect(() => {
+    if (isOpen && hasPreselectedCatalogItem && catalogItem && !isEditing) {
+      autoAddCatalogItem(catalogItem);
+    }
+  }, [isOpen, hasPreselectedCatalogItem, catalogItem, isEditing, autoAddCatalogItem]);
+
+  // Handler when catalog item is selected from search
+  const handleCatalogSelect = useCallback((item: GearCatalogItem) => {
+    // Auto-add to inventory immediately
+    autoAddCatalogItem(item);
+  }, [autoAddCatalogItem]);
+
+  // Pre-fill form from equipment item or edit item
   useEffect(() => {
     if (equipmentItem) {
       setName(equipmentItem.name);
@@ -91,9 +146,12 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
         sourceEquipmentId: equipmentItem?.id,
       };
 
+      console.log('[AddGearModal] Submitting inventory params:', params);
       await onSubmit(params);
+      console.log('[AddGearModal] Submit successful');
       onClose();
     } catch (err) {
+      console.error('[AddGearModal] Submit failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to save item');
     } finally {
       setIsSubmitting(false);
@@ -102,7 +160,52 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
 
   if (!isOpen) return null;
 
-  const title = editItem ? 'Edit Inventory Item' : equipmentItem ? 'Add to My Inventory' : 'Add New Item';
+  // Show loading state when auto-adding
+  if (isSubmitting && hasPreselectedCatalogItem) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div className="relative bg-slate-800 border border-slate-700 rounded-2xl p-8 flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-primary-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-white">Adding to inventory...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if auto-add failed
+  if (error && hasPreselectedCatalogItem) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show catalog search
+  if (showCatalogSearch) {
+    return (
+      <CatalogSearchModal
+        isOpen={true}
+        onClose={onClose}
+        onSelectItem={handleCatalogSelect}
+      />
+    );
+  }
+
+  // Show details form (only for editing or adding from equipment shop)
+  const title = editItem 
+    ? 'Edit Inventory Item' 
+    : 'Add to My Inventory';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -297,7 +400,7 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 resize-none"
-                placeholder="Any additional notes..."
+                placeholder="Any additional notes... (serial number, personal reminders, etc.)"
               />
             </div>
           </div>
@@ -319,7 +422,7 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
               {isSubmitting && (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               )}
-              {editItem ? 'Save Changes' : 'Add to Inventory'}
+              {editItem ? 'Save Changes' : 'Add to My Inventory'}
             </button>
           </div>
         </form>

@@ -26,25 +26,26 @@ import (
 
 // App holds all application dependencies
 type App struct {
-	Config         *config.Config
-	Logger         *logging.Logger
-	Cache          cache.Cache
-	Aggregator     *aggregator.Aggregator
-	EquipmentSvc   *equipment.Service
-	InventorySvc   inventory.InventoryManager
-	AircraftSvc    *aircraft.Service
-	RadioSvc       *radio.Service
-	BatterySvc     *battery.Service
-	AuthService    *auth.Service
-	AuthMiddleware *auth.Middleware
-	HTTPServer     *httpapi.Server
-	MCPServer      *mcp.Server
-	db             *database.DB
-	userStore      *database.UserStore
-	aircraftStore  *database.AircraftStore
-	fcConfigStore  *database.FCConfigStore
-	inventoryStore *database.InventoryStore
-	refreshLimiter ratelimit.RateLimiter
+	Config           *config.Config
+	Logger           *logging.Logger
+	Cache            cache.Cache
+	Aggregator       *aggregator.Aggregator
+	EquipmentSvc     *equipment.Service
+	InventorySvc     inventory.InventoryManager
+	AircraftSvc      *aircraft.Service
+	RadioSvc         *radio.Service
+	BatterySvc       *battery.Service
+	AuthService      *auth.Service
+	AuthMiddleware   *auth.Middleware
+	HTTPServer       *httpapi.Server
+	MCPServer        *mcp.Server
+	db               *database.DB
+	userStore        *database.UserStore
+	aircraftStore    *database.AircraftStore
+	fcConfigStore    *database.FCConfigStore
+	inventoryStore   *database.InventoryStore
+	gearCatalogStore *database.GearCatalogStore
+	refreshLimiter   ratelimit.RateLimiter
 }
 
 // New creates and initializes a new App instance
@@ -222,9 +223,12 @@ func (a *App) initDatabaseServices() {
 	a.inventoryStore = database.NewInventoryStore(db)
 	a.InventorySvc = inventory.NewService(a.inventoryStore, a.Logger)
 
-	// Initialize aircraft (with encryption support)
+	// Initialize gear catalog store (before aircraft, since aircraft contributes to catalog)
+	a.gearCatalogStore = database.NewGearCatalogStore(db)
+
+	// Initialize aircraft (with encryption support and gear catalog contribution)
 	a.aircraftStore = database.NewAircraftStore(db, encryptor)
-	a.AircraftSvc = aircraft.NewService(a.aircraftStore, a.InventorySvc, a.Logger)
+	a.AircraftSvc = aircraft.NewService(a.aircraftStore, a.InventorySvc, a.gearCatalogStore, a.Logger)
 
 	// Initialize radio
 	radioStore := database.NewRadioStore(db)
@@ -246,8 +250,8 @@ func (a *App) initDatabaseServices() {
 }
 
 func (a *App) initServers() {
-	// Initialize HTTP server with auth, aircraft, radio, battery, fc-config, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.refreshLimiter, a.Logger)
+	// Initialize HTTP server with auth, aircraft, radio, battery, fc-config, gear-catalog, and profile/pilot support
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.gearCatalogStore, a.refreshLimiter, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)

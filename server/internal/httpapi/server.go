@@ -22,39 +22,41 @@ import (
 )
 
 type Server struct {
-	agg            *aggregator.Aggregator
-	equipmentSvc   *equipment.Service
-	inventorySvc   inventory.InventoryManager
-	aircraftSvc    *aircraft.Service
-	radioSvc       *radio.Service
-	batterySvc     *battery.Service
-	authSvc        *auth.Service
-	authMiddleware *auth.Middleware
-	userStore      *database.UserStore
-	aircraftStore  *database.AircraftStore
-	fcConfigStore  *database.FCConfigStore
-	inventoryStore *database.InventoryStore
-	logger         *logging.Logger
-	server         *http.Server
-	refreshLimiter ratelimit.RateLimiter
+	agg              *aggregator.Aggregator
+	equipmentSvc     *equipment.Service
+	inventorySvc     inventory.InventoryManager
+	aircraftSvc      *aircraft.Service
+	radioSvc         *radio.Service
+	batterySvc       *battery.Service
+	authSvc          *auth.Service
+	authMiddleware   *auth.Middleware
+	userStore        *database.UserStore
+	aircraftStore    *database.AircraftStore
+	fcConfigStore    *database.FCConfigStore
+	inventoryStore   *database.InventoryStore
+	gearCatalogStore *database.GearCatalogStore
+	logger           *logging.Logger
+	server           *http.Server
+	refreshLimiter   ratelimit.RateLimiter
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, refreshLimiter ratelimit.RateLimiter, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, refreshLimiter ratelimit.RateLimiter, logger *logging.Logger) *Server {
 	return &Server{
-		agg:            agg,
-		equipmentSvc:   equipmentSvc,
-		inventorySvc:   inventorySvc,
-		aircraftSvc:    aircraftSvc,
-		radioSvc:       radioSvc,
-		batterySvc:     batterySvc,
-		authSvc:        authSvc,
-		authMiddleware: authMiddleware,
-		userStore:      userStore,
-		aircraftStore:  aircraftStore,
-		fcConfigStore:  fcConfigStore,
-		inventoryStore: inventoryStore,
-		logger:         logger,
-		refreshLimiter: refreshLimiter,
+		agg:              agg,
+		equipmentSvc:     equipmentSvc,
+		inventorySvc:     inventorySvc,
+		aircraftSvc:      aircraftSvc,
+		radioSvc:         radioSvc,
+		batterySvc:       batterySvc,
+		authSvc:          authSvc,
+		authMiddleware:   authMiddleware,
+		userStore:        userStore,
+		aircraftStore:    aircraftStore,
+		fcConfigStore:    fcConfigStore,
+		inventoryStore:   inventoryStore,
+		gearCatalogStore: gearCatalogStore,
+		logger:           logger,
+		refreshLimiter:   refreshLimiter,
 	}
 }
 
@@ -116,6 +118,12 @@ func (s *Server) Start(addr string) error {
 	if s.fcConfigStore != nil && s.authMiddleware != nil {
 		fcConfigAPI := NewFCConfigAPI(s.fcConfigStore, s.inventoryStore, s.authMiddleware, s.logger)
 		fcConfigAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
+	// Gear Catalog routes (crowd-sourced gear definitions)
+	if s.gearCatalogStore != nil && s.authMiddleware != nil {
+		gearCatalogAPI := NewGearCatalogAPI(s.gearCatalogStore, s.authMiddleware, s.logger)
+		gearCatalogAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
 	// Health check

@@ -156,10 +156,10 @@ export function EquipmentSidebar({
             }
           />
 
-          {/* My Gear - requires auth */}
+          {/* My Inventory - requires auth */}
           <NavItem
             section="inventory"
-            label="My Gear"
+            label="My Inventory"
             requiresAuth
             badge={inventorySummary?.totalItems}
             icon={

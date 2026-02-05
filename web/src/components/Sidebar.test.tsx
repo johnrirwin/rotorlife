@@ -83,7 +83,7 @@ describe('Sidebar', () => {
       expect(screen.getByText('Getting Started')).toBeInTheDocument()
       expect(screen.getByText('News Feed')).toBeInTheDocument()
       expect(screen.getByText('Shop')).toBeInTheDocument()
-      expect(screen.getByText('My Gear')).toBeInTheDocument()
+      expect(screen.getByText('My Inventory')).toBeInTheDocument()
       expect(screen.getByText('My Aircraft')).toBeInTheDocument()
       expect(screen.getByText('My Radio')).toBeInTheDocument()
       expect(screen.getByText('My Batteries')).toBeInTheDocument()
@@ -101,7 +101,7 @@ describe('Sidebar', () => {
       render(<Sidebar {...createDefaultProps()} />)
       
       // Auth-required sections should have a title indicating sign-in is needed
-      const myGearButton = screen.getByText('My Gear').closest('button')
+      const myGearButton = screen.getByText('My Inventory').closest('button')
       expect(myGearButton).toHaveAttribute('title', 'Sign in to access')
       
       const myAircraftButton = screen.getByText('My Aircraft').closest('button')
@@ -111,7 +111,7 @@ describe('Sidebar', () => {
     it('does not show lock icons when authenticated', () => {
       render(<Sidebar {...createDefaultProps({ isAuthenticated: true, user: mockUser })} />)
       
-      const myGearButton = screen.getByText('My Gear').closest('button')
+      const myGearButton = screen.getByText('My Inventory').closest('button')
       expect(myGearButton).not.toHaveAttribute('title')
     })
 

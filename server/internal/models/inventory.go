@@ -26,6 +26,10 @@ type InventoryItem struct {
 	Condition    ItemCondition     `json:"condition"`
 	Notes        string            `json:"notes,omitempty"`
 
+	// Catalog link - for crowd-sourced gear
+	CatalogID   string           `json:"catalogId,omitempty"`
+	CatalogItem *GearCatalogItem `json:"catalogItem,omitempty"` // Populated when fetching with catalog data
+
 	// Purchase tracking
 	BuildID        string     `json:"buildId,omitempty"`
 	PurchasePrice  *float64   `json:"purchasePrice,omitempty"`
@@ -63,6 +67,7 @@ type AddInventoryParams struct {
 	ImageURL          string            `json:"imageUrl,omitempty"`
 	Specs             json.RawMessage   `json:"specs,omitempty"`
 	SourceEquipmentID string            `json:"sourceEquipmentId,omitempty"`
+	CatalogID         string            `json:"catalogId,omitempty"` // Link to gear catalog item
 }
 
 // UpdateInventoryParams represents the parameters for updating an inventory item

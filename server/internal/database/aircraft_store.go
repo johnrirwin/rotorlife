@@ -353,7 +353,7 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 		var invID, invName, invCategory, invManufacturer, invCondition, invNotes, invImageURL sql.NullString
 		var invQuantity sql.NullInt32
 		var invPrice sql.NullFloat64
-		var invSpecs json.RawMessage
+		var invSpecs []byte // Use []byte instead of json.RawMessage to handle NULL
 
 		if err := rows.Scan(
 			&c.ID, &c.AircraftID, &c.Category, &scanInventoryItemID, &scanNotes, &c.CreatedAt, &c.UpdatedAt,
@@ -376,7 +376,7 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 				Condition:    models.ItemCondition(invCondition.String),
 				Notes:        invNotes.String,
 				ImageURL:     invImageURL.String,
-				Specs:        invSpecs,
+				Specs:        json.RawMessage(invSpecs),
 			}
 			if invPrice.Valid {
 				price := invPrice.Float64

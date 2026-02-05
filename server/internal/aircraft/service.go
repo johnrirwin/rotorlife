@@ -13,17 +13,19 @@ import (
 
 // Service handles aircraft operations
 type Service struct {
-	store        *database.AircraftStore
-	inventorySvc inventory.InventoryManager
-	logger       *logging.Logger
+	store            *database.AircraftStore
+	inventorySvc     inventory.InventoryManager
+	gearCatalogStore *database.GearCatalogStore
+	logger           *logging.Logger
 }
 
 // NewService creates a new aircraft service
-func NewService(store *database.AircraftStore, inventorySvc inventory.InventoryManager, logger *logging.Logger) *Service {
+func NewService(store *database.AircraftStore, inventorySvc inventory.InventoryManager, gearCatalogStore *database.GearCatalogStore, logger *logging.Logger) *Service {
 	return &Service{
-		store:        store,
-		inventorySvc: inventorySvc,
-		logger:       logger,
+		store:            store,
+		inventorySvc:     inventorySvc,
+		gearCatalogStore: gearCatalogStore,
+		logger:           logger,
 	}
 }
 
@@ -142,6 +144,36 @@ func (s *Service) SetComponent(ctx context.Context, userID string, params models
 			"item_id": newItem.ID,
 			"name":    newItem.Name,
 		}))
+
+		// Contribute to the shared gear catalog (crowd-sourced feature)
+		if s.gearCatalogStore != nil {
+			specs := params.NewGear.Specs
+			if specs == nil {
+				specs = json.RawMessage(`{}`)
+			}
+			catalogItem, err := s.gearCatalogStore.MigrateInventoryItem(
+				ctx,
+				newItem.ID,
+				userID,
+				newItem.Name,
+				newItem.Manufacturer,
+				params.NewGear.Category,
+				specs,
+				newItem.ImageURL,
+			)
+			if err != nil {
+				// Log but don't fail the operation - catalog contribution is best-effort
+				s.logger.Warn("Failed to contribute gear to catalog", logging.WithFields(map[string]interface{}{
+					"error":   err.Error(),
+					"item_id": newItem.ID,
+				}))
+			} else {
+				s.logger.Info("Contributed gear to catalog", logging.WithFields(map[string]interface{}{
+					"item_id":    newItem.ID,
+					"catalog_id": catalogItem.ID,
+				}))
+			}
+		}
 	}
 
 	// If still no inventory item ID, we're just removing the component

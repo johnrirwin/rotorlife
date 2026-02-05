@@ -125,6 +125,7 @@ The server automatically runs migrations on startup. Key tables include:
 | `sellers` | Equipment retailer information |
 | `equipment_items` | Catalog of drone equipment from sellers |
 | `inventory_items` | User's personal equipment inventory |
+| `gear_catalog` | Crowd-sourced global catalog of gear items |
 | `aircraft` | User's drone configurations |
 | `aircraft_components` | Components assigned to aircraft |
 | `aircraft_elrs_settings` | ELRS radio configuration per aircraft |
@@ -132,6 +133,16 @@ The server automatically runs migrations on startup. Key tables include:
 | `radio_backups` | Radio configuration backup storage |
 | `batteries` | User's battery inventory with specs |
 | `battery_logs` | Battery charge/discharge cycle history |
+
+**Gear Catalog Indexes:**
+
+| Index | Type | Purpose |
+|-------|------|---------|
+| `gear_catalog_canonical_key_key` | UNIQUE | Prevents duplicate items |
+| `idx_gear_catalog_brand_trgm` | GIN (pg_trgm) | Fuzzy brand search |
+| `idx_gear_catalog_model_trgm` | GIN (pg_trgm) | Fuzzy model search |
+| `idx_gear_catalog_fts` | GIN (tsvector) | Full-text search |
+| `idx_gear_catalog_specs` | GIN (jsonb) | Specs field filtering |
 
 **Production Recommendations:**
 - Enable SSL mode (`DB_SSLMODE=require`) 
@@ -518,6 +529,187 @@ Health check endpoint for monitoring and load balancers.
 
 ---
 
+### Gear Catalog API
+
+The gear catalog provides a shared, crowd-sourced database of drone equipment. Users can search and select items from the catalog when adding gear to their inventory, which helps with standardization and enables community-wide analytics.
+
+#### GET `/api/gear-catalog/search`
+
+Search the gear catalog with full-text and fuzzy matching.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `q` | string | - | Search query (brand, model, or description) |
+| `gearType` | string | - | Filter by gear type (motor, esc, fc, etc.) |
+| `limit` | int | 20 | Maximum results to return |
+| `offset` | int | 0 | Pagination offset |
+
+**Response:**
+
+```json
+{
+  "items": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "gearType": "motor",
+      "brand": "TMotor",
+      "model": "F80 Pro",
+      "variant": "1900KV",
+      "canonicalKey": "motor|tmotor|f80 pro|1900kv",
+      "status": "active",
+      "usageCount": 42,
+      "imageUrl": "https://...",
+      "createdAt": "2026-01-15T10:00:00Z"
+    }
+  ],
+  "totalCount": 150,
+  "query": "tmotor f80"
+}
+```
+
+---
+
+#### GET `/api/gear-catalog/popular`
+
+Get popular gear items, sorted by usage count.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `gearType` | string | - | Filter by gear type |
+| `limit` | int | 20 | Maximum results |
+
+**Response:** Same format as search.
+
+---
+
+#### POST `/api/gear-catalog`
+
+Create a new gear catalog item. Automatically deduplicates using canonical key matching.
+
+**Request Body:**
+
+```json
+{
+  "gearType": "motor",
+  "brand": "TMotor",
+  "model": "F80 Pro",
+  "variant": "1900KV",
+  "imageUrl": "https://...",
+  "description": "High-performance freestyle motor"
+}
+```
+
+**Response:**
+
+```json
+{
+  "item": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "gearType": "motor",
+    "brand": "TMotor",
+    "model": "F80 Pro",
+    "variant": "1900KV",
+    "canonicalKey": "motor|tmotor|f80 pro|1900kv",
+    "status": "active",
+    "usageCount": 0,
+    "createdAt": "2026-02-04T12:00:00Z"
+  },
+  "existing": false
+}
+```
+
+**Notes:**
+- If a matching canonical key exists, returns the existing item with `existing: true`
+- New items start with `usageCount: 0` and `status: active`
+
+---
+
+#### GET `/api/gear-catalog/:id`
+
+Get a specific catalog item by ID.
+
+**Response:**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "gearType": "motor",
+  "brand": "TMotor",
+  "model": "F80 Pro",
+  "variant": "1900KV",
+  "canonicalKey": "motor|tmotor|f80 pro|1900kv",
+  "status": "active",
+  "usageCount": 42,
+  "specs": {"kv": 1900, "weight": "34g"},
+  "imageUrl": "https://...",
+  "description": "High-performance freestyle motor",
+  "createdAt": "2026-01-15T10:00:00Z",
+  "updatedAt": "2026-02-01T15:30:00Z"
+}
+```
+
+---
+
+#### POST `/api/gear-catalog/:id/flag`
+
+Flag a catalog item for review (duplicate, incorrect info, etc.).
+
+**Request Body:**
+
+```json
+{
+  "reason": "duplicate"
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Item flagged for review"
+}
+```
+
+---
+
+#### POST `/api/gear-catalog/near-matches`
+
+Find similar items that might be duplicates before creating a new entry.
+
+**Request Body:**
+
+```json
+{
+  "gearType": "motor",
+  "brand": "T-Motor",
+  "model": "F80Pro"
+}
+```
+
+**Response:**
+
+```json
+{
+  "matches": [
+    {
+      "item": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "brand": "TMotor",
+        "model": "F80 Pro",
+        "variant": "1900KV"
+      },
+      "similarity": 0.85
+    }
+  ]
+}
+```
+
+---
+
 ## MCP Protocol
 
 The server implements the [Model Context Protocol](https://modelcontextprotocol.io/) for AI assistant integration.
@@ -673,6 +865,65 @@ type SourceInfo struct {
     Enabled     bool    // Whether source is active
 }
 ```
+
+### GearCatalogItem
+
+Represents a canonical gear item in the shared, crowd-sourced catalog.
+
+```go
+type GearCatalogItem struct {
+    ID              string            // UUID primary key
+    GearType        GearType          // motor, esc, fc, aio, frame, vtx, receiver, etc.
+    Brand           string            // Manufacturer name (e.g., "TMotor", "BetaFPV")
+    Model           string            // Product model name
+    Variant         string            // Optional variant (e.g., "1900KV", "V3", "Pro")
+    Specs           json.RawMessage   // Flexible JSON for type-specific specifications
+    Source          CatalogItemSource // How the item was added (user-submitted, import, etc.)
+    CreatedByUserID string            // User who created the item (if user-submitted)
+    Status          CatalogItemStatus // Moderation status (active, pending, flagged, rejected)
+    CanonicalKey    string            // Normalized key for deduplication
+    ImageURL        string            // Product image URL
+    Description     string            // Optional description
+    UsageCount      int               // Number of users with this in their inventory
+    CreatedAt       time.Time         // When the item was created
+    UpdatedAt       time.Time         // Last modification time
+}
+```
+
+**Gear Types:**
+
+| Type | Description |
+|------|-------------|
+| `motor` | Brushless motors |
+| `esc` | Electronic Speed Controllers |
+| `fc` | Flight Controllers |
+| `aio` | All-in-One boards (FC+ESC) |
+| `frame` | Drone frames |
+| `vtx` | Video Transmitters |
+| `receiver` | Radio receivers |
+| `antenna` | Antennas (video and radio) |
+| `battery` | LiPo batteries |
+| `prop` | Propellers |
+| `radio` | Radio transmitters |
+| `camera` | FPV and action cameras |
+| `other` | Other accessories |
+
+**Canonical Key Normalization:**
+
+The canonical key is used to prevent duplicate entries for the same product. It's built from the gear type, brand, model, and variant, normalized as follows:
+
+1. Unicode NFC normalization
+2. Convert to lowercase
+3. Replace punctuation with spaces
+4. Remove diacritical marks (accents)
+5. Collapse multiple spaces to single space
+6. Trim whitespace
+7. Join with `|` delimiter
+
+**Example transformations:**
+- `"TMotor F80-Pro 1900KV"` → `motor|tmotor|f80 pro|1900kv`
+- `"TBS Crossfire Nano"` → `receiver|tbs|crossfire nano`
+- `"ÉMAX RS2205"` → `motor|emax|rs2205`
 
 ---
 

@@ -50,8 +50,8 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 		INSERT INTO inventory_items (
 			user_id, name, category, manufacturer, quantity, condition, notes,
 			build_id, purchase_price, purchase_date, purchase_seller,
-			product_url, image_url, specs, source_equipment_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			product_url, image_url, specs, source_equipment_id, catalog_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -71,12 +71,14 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 		ImageURL:          params.ImageURL,
 		Specs:             specs,
 		SourceEquipmentID: params.SourceEquipmentID,
+		CatalogID:         params.CatalogID,
 	}
 
 	err := s.db.QueryRowContext(ctx, query,
 		nullString(userID), item.Name, item.Category, item.Manufacturer, item.Quantity, item.Condition, item.Notes,
 		nullString(item.BuildID), item.PurchasePrice, purchaseDate, nullString(item.PurchaseSeller),
 		nullString(item.ProductURL), nullString(item.ImageURL), item.Specs, nullString(item.SourceEquipmentID),
+		nullString(item.CatalogID),
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
@@ -91,7 +93,7 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 	query := `
 		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
 			   build_id, purchase_price, purchase_date, purchase_seller,
-			   product_url, image_url, specs, source_equipment_id, created_at, updated_at
+			   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 		FROM inventory_items
 		WHERE id = $1
 	`
@@ -102,7 +104,7 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 		query = `
 			SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
 				   build_id, purchase_price, purchase_date, purchase_seller,
-				   product_url, image_url, specs, source_equipment_id, created_at, updated_at
+				   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 			FROM inventory_items
 			WHERE id = $1 AND user_id = $2
 		`
@@ -111,7 +113,7 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 
 	item := &models.InventoryItem{}
 	var itemUserID sql.NullString
-	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID sql.NullString
+	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID, catalogID sql.NullString
 	var purchasePrice sql.NullFloat64
 	var purchaseDate sql.NullTime
 
@@ -119,7 +121,7 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
 		&item.Quantity, &item.Condition, &item.Notes,
 		&buildID, &purchasePrice, &purchaseDate, &purchaseSeller,
-		&productURL, &imageURL, &item.Specs, &sourceEquipmentID,
+		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
 		&item.CreatedAt, &item.UpdatedAt,
 	)
 
@@ -138,6 +140,7 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 	item.ProductURL = productURL.String
 	item.ImageURL = imageURL.String
 	item.SourceEquipmentID = sourceEquipmentID.String
+	item.CatalogID = catalogID.String
 
 	if purchasePrice.Valid {
 		item.PurchasePrice = &purchasePrice.Float64
@@ -212,7 +215,7 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 	query := fmt.Sprintf(`
 		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
 			   build_id, purchase_price, purchase_date, purchase_seller,
-			   product_url, image_url, specs, source_equipment_id, created_at, updated_at
+			   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 		FROM inventory_items %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -231,7 +234,7 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 
 	for rows.Next() {
 		var item models.InventoryItem
-		var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID sql.NullString
+		var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID, catalogID sql.NullString
 		var purchasePrice sql.NullFloat64
 		var purchaseDate sql.NullTime
 
@@ -239,7 +242,7 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 			&item.ID, &item.UserID, &item.Name, &item.Category, &item.Manufacturer,
 			&item.Quantity, &item.Condition, &item.Notes,
 			&buildID, &purchasePrice, &purchaseDate, &purchaseSeller,
-			&productURL, &imageURL, &item.Specs, &sourceEquipmentID,
+			&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
 			&item.CreatedAt, &item.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan inventory item: %w", err)
@@ -250,6 +253,7 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 		item.ProductURL = productURL.String
 		item.ImageURL = imageURL.String
 		item.SourceEquipmentID = sourceEquipmentID.String
+		item.CatalogID = catalogID.String
 
 		if purchasePrice.Valid {
 			item.PurchasePrice = &purchasePrice.Float64

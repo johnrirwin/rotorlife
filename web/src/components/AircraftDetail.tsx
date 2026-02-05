@@ -288,7 +288,9 @@ export function AircraftDetail({
             <div className="space-y-3">
               {COMPONENT_CATEGORIES.map((cat) => {
                 const component = getComponentByCategory(cat.value);
-                const inventoryItem = component ? getInventoryItemById(component.inventoryItemId) : null;
+                // Check both server-provided inventoryItem and local lookup
+                const inventoryItem = component?.inventoryItem || (component ? getInventoryItemById(component.inventoryItemId) : null);
+                const hasAssignedItem = !!inventoryItem;
                 const availableItems = getAvailableItems(cat.value);
                 const isSelecting = selectedCategory === cat.value;
 
@@ -322,7 +324,7 @@ export function AircraftDetail({
 
                       {/* Actions */}
                       <div className="flex items-center gap-2">
-                        {component && (
+                        {hasAssignedItem && (
                           <button
                             onClick={() => handleRemoveComponent(cat.value)}
                             disabled={isSubmitting}
@@ -336,7 +338,7 @@ export function AircraftDetail({
                           disabled={isSubmitting}
                           className="px-3 py-1.5 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
                         >
-                          {component ? 'Change' : 'Assign'}
+                          {hasAssignedItem ? 'Change' : 'Assign'}
                         </button>
                       </div>
                     </div>

@@ -100,11 +100,13 @@ web/src/
 ├── authApi.ts               # Authentication API calls
 ├── equipmentApi.ts          # Equipment/inventory API calls
 ├── aircraftApi.ts           # Aircraft API calls
+├── gearCatalogApi.ts        # Gear catalog API calls
 │
 ├── types.ts                 # News feed types
 ├── authTypes.ts             # Auth types
 ├── equipmentTypes.ts        # Equipment/inventory types
 ├── aircraftTypes.ts         # Aircraft types
+├── gearCatalogTypes.ts      # Gear catalog types
 │
 ├── hooks.ts                 # Shared custom hooks
 ├── hooks/
@@ -129,7 +131,9 @@ web/src/
     ├── EquipmentCard.tsx    # Equipment item card
     │
     ├── InventoryCard.tsx    # Inventory item card
-    ├── AddInventoryModal.tsx# Add/edit inventory modal
+    ├── AddInventoryModal.tsx# Legacy inventory modal
+    ├── AddGearModal.tsx     # Two-step gear add modal (catalog → details)
+    ├── CatalogSearchModal.tsx# Catalog search with typeahead
     │
     ├── AircraftCard.tsx     # Aircraft card
     ├── AircraftList.tsx     # Aircraft list
@@ -264,6 +268,31 @@ Each domain has its own API module:
 | `authApi.ts` | `/api/auth/*` | No |
 | `equipmentApi.ts` | `/api/equipment/*`, `/api/inventory/*` | Partial |
 | `aircraftApi.ts` | `/api/aircraft/*` | Yes |
+| `gearCatalogApi.ts` | `/api/gear-catalog/*` | Yes |
+
+### Gear Catalog API
+
+The gear catalog API enables searching and contributing to the crowd-sourced gear database:
+
+```typescript
+// Search the catalog with typeahead
+searchCatalog(params: CatalogSearchParams): Promise<CatalogSearchResponse>
+
+// Get popular items (for initial display)
+getPopularItems(gearType?: GearType, limit?: number): Promise<CatalogSearchResponse>
+
+// Create a new catalog item (returns existing if duplicate)
+createCatalogItem(params: CreateCatalogParams): Promise<CatalogCreateResponse>
+
+// Get item details
+getCatalogItem(id: string): Promise<GearCatalogItem>
+
+// Flag an item for review
+flagCatalogItem(id: string, reason: string): Promise<void>
+
+// Find potential duplicates before creating
+findNearMatches(params: NearMatchParams): Promise<NearMatchResponse>
+```
 
 ### API Pattern
 
