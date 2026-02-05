@@ -36,12 +36,18 @@ func (api *GearCatalogAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware fun
 		return
 	}
 
-	// Public routes (read-only)
+	// Public routes (read-only access to the shared gear catalog)
+	// These are intentionally unauthenticated to allow users to browse/search
+	// the crowd-sourced gear database without requiring login
 	mux.HandleFunc("/api/gear-catalog/search", corsMiddleware(api.handleSearch))
 	mux.HandleFunc("/api/gear-catalog/popular", corsMiddleware(api.handleGetPopular))
 
-	// Authenticated routes
+	// Mixed auth routes (GET is public, POST requires auth)
+	// GET: delegates to handleSearch (public read access)
+	// POST: requires authentication to create new catalog entries
 	mux.HandleFunc("/api/gear-catalog", corsMiddleware(api.handleCatalog))
+	
+	// Authenticated routes
 	mux.HandleFunc("/api/gear-catalog/", corsMiddleware(api.handleCatalogItem))
 	mux.HandleFunc("/api/gear-catalog/near-matches", corsMiddleware(api.authMiddleware.RequireAuth(api.handleNearMatches)))
 }
