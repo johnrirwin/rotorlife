@@ -81,8 +81,9 @@ export function CatalogSearchModal({ isOpen, onClose, onSelectItem, initialGearT
   }, [query, handleSearch]);
 
   const handleSelectItem = (item: GearCatalogItem) => {
+    // Only call onSelectItem - let the parent component decide whether to close
+    // When used from AddGearModal, this transitions to the details form step
     onSelectItem(item);
-    onClose();
   };
 
   if (!isOpen) return null;
