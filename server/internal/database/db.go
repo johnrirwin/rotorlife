@@ -105,6 +105,9 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationAircraftTuningSnapshots,
 		migrationTuningSnapshotDiffBackup,
 		migrationDropPasswordHash,
+		migrationGearCatalog,
+		migrationPgTrgm,
+		migrationInventoryCatalogLink,
 	}
 
 	for i, migration := range migrations {
@@ -520,4 +523,72 @@ ALTER TABLE aircraft_tuning_snapshots ADD COLUMN IF NOT EXISTS diff_backup TEXT;
 const migrationDropPasswordHash = `
 -- Remove password_hash column as we now use Google-only authentication
 ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
+`
+
+// Migration for gear catalog (crowd-sourced)
+const migrationGearCatalog = `
+-- Create gear_catalog table for crowd-sourced gear definitions
+CREATE TABLE IF NOT EXISTS gear_catalog (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    gear_type VARCHAR(50) NOT NULL,
+    brand VARCHAR(255) NOT NULL,
+    model VARCHAR(512) NOT NULL,
+    variant VARCHAR(255),
+    specs JSONB DEFAULT '{}',
+    source VARCHAR(50) NOT NULL DEFAULT 'user-submitted',
+    created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    canonical_key VARCHAR(1024) NOT NULL,
+    image_url TEXT,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Unique index on canonical_key for deduplication
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gear_catalog_canonical_key ON gear_catalog(canonical_key);
+
+-- Indexes for searching
+CREATE INDEX IF NOT EXISTS idx_gear_catalog_gear_type ON gear_catalog(gear_type);
+CREATE INDEX IF NOT EXISTS idx_gear_catalog_brand ON gear_catalog(LOWER(brand));
+CREATE INDEX IF NOT EXISTS idx_gear_catalog_status ON gear_catalog(status);
+CREATE INDEX IF NOT EXISTS idx_gear_catalog_created_by ON gear_catalog(created_by_user_id);
+
+-- Full-text search on brand, model, variant
+CREATE INDEX IF NOT EXISTS idx_gear_catalog_search ON gear_catalog USING gin(
+    to_tsvector('english', brand || ' ' || model || ' ' || COALESCE(variant, ''))
+);
+
+-- GIN index on specs JSONB for filtering
+CREATE INDEX IF NOT EXISTS idx_gear_catalog_specs ON gear_catalog USING gin(specs);
+`
+
+// Migration to enable pg_trgm extension for fuzzy search
+const migrationPgTrgm = `
+-- Enable pg_trgm extension for similarity search (may require superuser)
+-- This will fail silently on hosted databases where extensions are restricted
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pg_trgm extension not available, fuzzy search will use fallback';
+END $$;
+
+-- Create trigram indexes if extension is available
+DO $$
+BEGIN
+    CREATE INDEX IF NOT EXISTS idx_gear_catalog_brand_trgm ON gear_catalog USING gin(brand gin_trgm_ops);
+    CREATE INDEX IF NOT EXISTS idx_gear_catalog_model_trgm ON gear_catalog USING gin(model gin_trgm_ops);
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Could not create trigram indexes, using text search only';
+END $$;
+`
+
+// Migration to add catalog_id to inventory_items
+const migrationInventoryCatalogLink = `
+-- Add catalog_id column to link inventory items to gear catalog
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS catalog_id UUID REFERENCES gear_catalog(id) ON DELETE SET NULL;
+
+-- Index for looking up inventory items by catalog item
+CREATE INDEX IF NOT EXISTS idx_inventory_catalog ON inventory_items(catalog_id);
 `

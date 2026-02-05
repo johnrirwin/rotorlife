@@ -8,6 +8,8 @@ export { ItemDetail } from './ItemDetail';
 export { EquipmentCard, EquipmentList } from './EquipmentCard';
 export { InventoryCard, InventoryList } from './InventoryCard';
 export { AddInventoryModal } from './AddInventoryModal';
+export { AddGearModal } from './AddGearModal';
+export { CatalogSearchModal } from './CatalogSearchModal';
 export { ShopSection } from './ShopSection';
 
 // Aircraft components

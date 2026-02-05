@@ -116,6 +116,7 @@ export interface InventoryItem {
   quantity: number;
   condition: ItemCondition;
   notes?: string;
+  catalogId?: string; // Link to gear catalog item
   buildId?: string;
   purchasePrice?: number;
   purchaseDate?: string;
@@ -136,6 +137,7 @@ export interface AddInventoryParams {
   quantity?: number;
   condition?: ItemCondition;
   notes?: string;
+  catalogId?: string; // Link to gear catalog item
   buildId?: string;
   purchasePrice?: number;
   purchaseDate?: string;

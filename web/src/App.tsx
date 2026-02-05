@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddGearModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile } from './components';
 import { LoginPage } from './components/LoginPage';
 import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
@@ -852,7 +852,7 @@ function App() {
       )}
 
       {/* Add/Edit Inventory Modal */}
-      <AddInventoryModal
+      <AddGearModal
         isOpen={showAddInventoryModal}
         onClose={() => {
           setShowAddInventoryModal(false);
