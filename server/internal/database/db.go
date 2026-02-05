@@ -105,10 +105,10 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationAircraftTuningSnapshots,
 		migrationTuningSnapshotDiffBackup,
 		migrationDropPasswordHash,
-		migrationGearCatalog,              // Creates gear_catalog table
-		migrationPgTrgm,                   // Adds trigram search for gear_catalog
-		migrationInventoryCatalogLink,     // Adds FK to gear_catalog (depends on migrationGearCatalog)
-		migrationGearCatalogBestFor,       // Adds best_for column for drone type
+		migrationGearCatalog,          // Creates gear_catalog table
+		migrationPgTrgm,               // Adds trigram search for gear_catalog
+		migrationInventoryCatalogLink, // Adds FK to gear_catalog (depends on migrationGearCatalog)
+		migrationGearCatalogBestFor,   // Adds best_for column for drone type
 	}
 
 	for i, migration := range migrations {

@@ -46,7 +46,7 @@ func (api *GearCatalogAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware fun
 	// GET: delegates to handleSearch (public read access)
 	// POST: requires authentication to create new catalog entries
 	mux.HandleFunc("/api/gear-catalog", corsMiddleware(api.handleCatalog))
-	
+
 	// Authenticated routes
 	mux.HandleFunc("/api/gear-catalog/", corsMiddleware(api.handleCatalogItem))
 	mux.HandleFunc("/api/gear-catalog/near-matches", corsMiddleware(api.authMiddleware.RequireAuth(api.handleNearMatches)))
