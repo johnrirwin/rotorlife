@@ -215,6 +215,8 @@ func BuildCanonicalKey(gearType GearType, brand, model, variant string) string {
 		normalizeString(brand),
 		normalizeString(model),
 	}
+	// Trim variant before checking - ensures " " and "" are treated the same
+	variant = strings.TrimSpace(variant)
 	if variant != "" {
 		parts = append(parts, normalizeString(variant))
 	}

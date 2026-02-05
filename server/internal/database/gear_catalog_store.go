@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 
 	"github.com/johnrirwin/flyingforge/internal/models"
@@ -511,8 +512,15 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 }
 
 // MigrateInventoryItem creates a catalog entry from an existing inventory item
-// and links the inventory item to it
+// and links the inventory item to it. Uses a transaction to ensure consistency.
 func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryItemID, userID, name, manufacturer string, category models.EquipmentCategory, specs json.RawMessage, imageURL string) (*models.GearCatalogItem, error) {
+	// Start a transaction to ensure atomic create+link
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	// Convert category to gear type
 	gearType := models.GearTypeFromEquipmentCategory(category)
 
@@ -525,27 +533,41 @@ func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryIt
 		model = name
 	}
 
-	// Create or find catalog entry
-	createParams := models.CreateGearCatalogParams{
-		GearType: gearType,
-		Brand:    brand,
-		Model:    model,
-		Variant:  variant,
-		Specs:    specs,
-		ImageURL: imageURL,
-	}
+	// Generate canonical key
+	canonicalKey := models.BuildCanonicalKey(gearType, brand, model, variant)
 
-	response, err := s.Create(ctx, userID, createParams)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create catalog entry: %w", err)
+	// First check if this catalog item already exists
+	checkQuery := `SELECT id FROM gear_catalog WHERE canonical_key = $1`
+	var catalogID string
+	err = tx.QueryRowContext(ctx, checkQuery, canonicalKey).Scan(&catalogID)
+
+	if err == sql.ErrNoRows {
+		// Create new catalog entry
+		catalogID = uuid.New().String()
+		insertQuery := `
+			INSERT INTO gear_catalog (id, gear_type, brand, model, variant, specs, source, created_by_user_id, status, canonical_key, image_url, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, 'user', $7, 'active', $8, $9, NOW(), NOW())
+		`
+		_, err = tx.ExecContext(ctx, insertQuery, catalogID, gearType, brand, model, variant, specs, userID, canonicalKey, imageURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create catalog entry: %w", err)
+		}
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to check for existing catalog entry: %w", err)
 	}
 
 	// Update the inventory item to link to the catalog
 	updateQuery := `UPDATE inventory_items SET catalog_id = $1, updated_at = NOW() WHERE id = $2`
-	_, err = s.db.ExecContext(ctx, updateQuery, response.Item.ID, inventoryItemID)
+	_, err = tx.ExecContext(ctx, updateQuery, catalogID, inventoryItemID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to link inventory item to catalog: %w", err)
 	}
 
-	return response.Item, nil
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Fetch the full catalog item to return
+	return s.Get(ctx, catalogID)
 }

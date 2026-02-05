@@ -78,6 +78,11 @@ export function CatalogSearchModal({ isOpen, onClose, onSelectItem, initialGearT
 
   useEffect(() => {
     handleSearch(query);
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, [query, handleSearch]);
 
   const handleSelectItem = (item: GearCatalogItem) => {
