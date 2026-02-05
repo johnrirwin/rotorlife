@@ -105,9 +105,9 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationAircraftTuningSnapshots,
 		migrationTuningSnapshotDiffBackup,
 		migrationDropPasswordHash,
-		migrationGearCatalog,
-		migrationPgTrgm,
-		migrationInventoryCatalogLink,
+		migrationGearCatalog,              // Creates gear_catalog table
+		migrationPgTrgm,                   // Adds trigram search for gear_catalog
+		migrationInventoryCatalogLink,     // Adds FK to gear_catalog (depends on migrationGearCatalog)
 	}
 
 	for i, migration := range migrations {
@@ -585,8 +585,11 @@ END $$;
 `
 
 // Migration to add catalog_id to inventory_items
+// DEPENDENCY: Requires migrationGearCatalog to run first (gear_catalog table must exist)
+// This is guaranteed by the ordering in the migrations slice in RunMigrations()
 const migrationInventoryCatalogLink = `
 -- Add catalog_id column to link inventory items to gear catalog
+-- NOTE: gear_catalog table must exist before this migration runs
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS catalog_id UUID REFERENCES gear_catalog(id) ON DELETE SET NULL;
 
 -- Index for looking up inventory items by catalog item
