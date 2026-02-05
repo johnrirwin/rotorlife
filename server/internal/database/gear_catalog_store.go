@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/johnrirwin/flyingforge/internal/models"
 	"github.com/lib/pq"
+
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 // GearCatalogStore handles gear catalog database operations
