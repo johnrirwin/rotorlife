@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import type { SourceType } from '../types';
 
 interface TopBarProps {
@@ -15,6 +16,7 @@ interface TopBarProps {
   isRefreshing: boolean;
   refreshCooldown: number; // seconds remaining
   totalCount: number;
+  isCollapsed?: boolean; // External control for mobile collapse
 }
 
 export function TopBar({
@@ -32,7 +34,21 @@ export function TopBar({
   isRefreshing,
   refreshCooldown,
   totalCount,
+  isCollapsed = false,
 }: TopBarProps) {
+  const headerRef = useRef<HTMLElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Dismiss keyboard when scrolling starts
+  useEffect(() => {
+    if (isCollapsed) {
+      searchInputRef.current?.blur();
+    }
+  }, [isCollapsed]);
+
+  // Show filters when not collapsed (at top of scroll)
+  const showFilters = !isCollapsed;
+
   // Format cooldown time as M:SS
   const formatCooldown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -49,7 +65,7 @@ export function TopBar({
   };
 
   return (
-    <header className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
+    <header ref={headerRef} className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
         {/* Search - full width on mobile */}
         <div className="flex-1 min-w-0 md:min-w-[200px] md:max-w-md">
@@ -68,6 +84,7 @@ export function TopBar({
               />
             </svg>
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="Search news..."
               value={query}
@@ -88,8 +105,12 @@ export function TopBar({
           </div>
         </div>
 
-        {/* Filters row - stacked on mobile, inline on desktop */}
-        <div className="flex flex-wrap items-center gap-2 md:gap-4">
+        {/* Filters row - collapsible on mobile, always visible on desktop */}
+        <div className={`flex flex-wrap items-center gap-2 md:gap-4 transition-all duration-200 ease-in-out md:!max-h-none md:!opacity-100 md:!overflow-visible ${
+          showFilters 
+            ? 'max-h-[200px] opacity-100' 
+            : 'max-h-0 opacity-0 overflow-hidden md:max-h-none md:opacity-100'
+        }`}>
           {/* Date Range - collapsible on mobile */}
           <div className="flex items-center gap-2 flex-wrap">
             <label className="text-xs md:text-sm text-slate-400">From:</label>
