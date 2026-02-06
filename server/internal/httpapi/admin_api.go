@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -76,7 +77,7 @@ func (api *AdminAPI) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 // handleAdminGear handles GET /api/admin/gear (list gear for moderation)
 func (api *AdminAPI) handleAdminGear(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
 
@@ -120,7 +121,7 @@ func (api *AdminAPI) handleAdminGearByID(w http.ResponseWriter, r *http.Request)
 
 	id := strings.TrimSuffix(path, "/")
 	if id == "" {
-		http.Error(w, "gear ID required", http.StatusBadRequest)
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "gear ID required"})
 		return
 	}
 
@@ -130,7 +131,7 @@ func (api *AdminAPI) handleAdminGearByID(w http.ResponseWriter, r *http.Request)
 	case http.MethodPut:
 		api.handleUpdateGear(w, r, id)
 	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
 }
 
@@ -164,14 +165,14 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 
 	var params models.AdminUpdateGearCatalogParams
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 
 	// Validate ImageURL if provided
 	if params.ImageURL != nil && *params.ImageURL != "" {
 		if err := validateImageURL(*params.ImageURL); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
 	}
@@ -244,12 +245,12 @@ func (api *AdminAPI) handleGearImage(w http.ResponseWriter, r *http.Request, id 
 	case http.MethodDelete:
 		api.deleteGearImage(w, r, id)
 	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
 }
 
 // uploadGearImage handles POST /api/admin/gear/{id}/image
-// Max file size: 1MB, accepts JPEG/PNG only
+// Max file size: 1MB, accepts JPEG/PNG/WebP only
 func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id string) {
 	userID := auth.GetUserID(r.Context())
 
@@ -294,8 +295,8 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 	}
 
 	// Read image data
-	imageData := make([]byte, header.Size)
-	if _, err := file.Read(imageData); err != nil {
+	imageData, err := io.ReadAll(file)
+	if err != nil {
 		api.logger.Error("Failed to read image data", logging.WithField("error", err.Error()))
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "Failed to read image",
@@ -356,12 +357,12 @@ func (api *AdminAPI) getGearImage(w http.ResponseWriter, r *http.Request, id str
 			"gearId": id,
 			"error":  err.Error(),
 		}))
-		http.Error(w, "Failed to get image", http.StatusInternalServerError)
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get image"})
 		return
 	}
 
 	if imageData == nil {
-		http.Error(w, "No image for this gear item", http.StatusNotFound)
+		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "no image for this gear item"})
 		return
 	}
 

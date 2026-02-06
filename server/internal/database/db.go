@@ -633,10 +633,10 @@ ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS description_curated_at TIMESTA
 CREATE INDEX IF NOT EXISTS idx_gear_catalog_image_status ON gear_catalog(image_status);
 
 -- Set existing items with images to 'approved', items without to 'missing'
-UPDATE gear_catalog SET image_status = 'approved' WHERE image_url IS NOT NULL AND image_url != '' AND image_status IS NULL;
-UPDATE gear_catalog SET image_status = 'missing' WHERE (image_url IS NULL OR image_url = '') AND image_status IS NULL;
-UPDATE gear_catalog SET description_status = 'approved' WHERE description IS NOT NULL AND description != '' AND description_status IS NULL;
-UPDATE gear_catalog SET description_status = 'missing' WHERE (description IS NULL OR description = '') AND description_status IS NULL;
+UPDATE gear_catalog SET image_status = 'approved' WHERE image_url IS NOT NULL AND image_url != '';
+UPDATE gear_catalog SET image_status = 'missing' WHERE (image_url IS NULL OR image_url = '');
+UPDATE gear_catalog SET description_status = 'approved' WHERE description IS NOT NULL AND description != '';
+UPDATE gear_catalog SET description_status = 'missing' WHERE (description IS NULL OR description = '');
 `
 
 // Migration to add is_admin flag to users

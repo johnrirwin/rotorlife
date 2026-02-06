@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type FormEvent, type ChangeEvent } from 'react';
 import type { GearCatalogItem, GearType, ImageStatus, AdminUpdateGearCatalogParams } from '../gearCatalogTypes';
 import { GEAR_TYPES } from '../gearCatalogTypes';
 import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, getGearImageUrl } from '../adminApi';
@@ -73,29 +73,36 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
     }
   }, [isAdmin, query, gearType, imageStatus]);
 
-  // Initial load
+  // Initial load - only runs on mount or when isAdmin changes
+  // Filter changes are handled by explicit Search button click
   useEffect(() => {
-    loadItems(true);
-  }, [loadItems]);
+    if (isAdmin) {
+      loadItems(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]); // Intentionally excluding loadItems to prevent filter-change reloads
 
   // Infinite scroll observer
+  // Note: loadItems has a synchronous isLoadingRef guard that prevents concurrent calls,
+  // so we don't need to check loading state here - just trigger on intersection
   useEffect(() => {
-    if (!loadMoreRef.current || !hasMore) return;
+    const element = loadMoreRef.current;
+    if (!element || !hasMore) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoadingRef.current) {
+        if (entries[0].isIntersecting) {
           loadItems(false);
         }
       },
       { threshold: 0.1 }
     );
 
-    observer.observe(loadMoreRef.current);
+    observer.observe(element);
     return () => observer.disconnect();
   }, [hasMore, loadItems]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     loadItems(true);
   };
@@ -414,7 +421,7 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
   const hasExistingImage = item.imageUrl || item.imageStatus === 'approved';
   const existingImageUrl = item.imageUrl || (item.imageStatus === 'approved' ? getGearImageUrl(item.id) : null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {
       setImageFile(null);
@@ -455,7 +462,7 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
     setImagePreview(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     setError(null);
@@ -469,7 +476,12 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
       if (variant !== (item.variant || '')) params.variant = variant;
       if (description !== (item.description || '')) params.description = description;
       if (msrp !== (item.msrp?.toString() || '')) {
-        params.msrp = msrp ? parseFloat(msrp) : undefined;
+        if (msrp) {
+          params.msrp = parseFloat(msrp);
+        } else if (item.msrp != null) {
+          // Explicitly clear MSRP if it was previously set
+          params.clearMsrp = true;
+        }
       }
       
       // Handle image: upload new, delete existing, or no change
@@ -520,7 +532,7 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[calc(90vh-140px)]">
+        <form id="gear-edit-form" onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[calc(90vh-140px)]">
           {error && (
             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
               {error}
@@ -675,7 +687,8 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
             Cancel
           </button>
           <button
-            onClick={handleSubmit}
+            type="submit"
+            form="gear-edit-form"
             disabled={isSaving}
             className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
           >

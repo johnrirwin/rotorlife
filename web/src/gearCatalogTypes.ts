@@ -116,6 +116,7 @@ export interface AdminUpdateGearCatalogParams {
   variant?: string;
   description?: string;
   msrp?: number;
+  clearMsrp?: boolean; // Explicitly clear MSRP when true
   imageUrl?: string;
 }
 

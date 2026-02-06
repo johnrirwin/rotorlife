@@ -198,7 +198,8 @@ type AdminUpdateGearCatalogParams struct {
 	Variant     *string  `json:"variant,omitempty"`
 	Description *string  `json:"description,omitempty"`
 	MSRP        *float64 `json:"msrp,omitempty"`
-	ImageURL    *string  `json:"imageUrl,omitempty"` // Admin can set image URL
+	ClearMSRP   bool     `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
+	ImageURL    *string  `json:"imageUrl,omitempty"`  // Admin can set image URL
 }
 
 // AdminGearSearchParams represents admin search parameters with curation filters

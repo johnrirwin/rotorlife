@@ -159,7 +159,6 @@ func (s *Service) SetComponent(ctx context.Context, userID string, params models
 				newItem.Manufacturer,
 				params.NewGear.Category,
 				specs,
-				newItem.ImageURL,
 			)
 			if err != nil {
 				// Log but don't fail the operation - catalog contribution is best-effort

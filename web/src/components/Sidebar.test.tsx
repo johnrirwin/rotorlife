@@ -296,4 +296,47 @@ describe('Sidebar', () => {
       expect(spinner).toBeInTheDocument()
     })
   })
+
+  describe('Admin Navigation', () => {
+    it('hides Gear Moderation for non-admin users', () => {
+      render(<Sidebar {...createDefaultProps({ 
+        isAuthenticated: true, 
+        user: mockUser // mockUser has isAdmin: false
+      })} />)
+      
+      expect(screen.queryByText('Gear Moderation')).not.toBeInTheDocument()
+    })
+
+    it('hides Gear Moderation when unauthenticated', () => {
+      render(<Sidebar {...createDefaultProps({ 
+        isAuthenticated: false, 
+        user: null
+      })} />)
+      
+      expect(screen.queryByText('Gear Moderation')).not.toBeInTheDocument()
+    })
+
+    it('shows Gear Moderation for admin users', () => {
+      const adminUser: User = { ...mockUser, isAdmin: true }
+      render(<Sidebar {...createDefaultProps({ 
+        isAuthenticated: true, 
+        user: adminUser
+      })} />)
+      
+      expect(screen.getByText('Gear Moderation')).toBeInTheDocument()
+    })
+
+    it('navigates to admin-gear section when Gear Moderation is clicked', () => {
+      const adminUser: User = { ...mockUser, isAdmin: true }
+      const onSectionChange = vi.fn()
+      render(<Sidebar {...createDefaultProps({ 
+        isAuthenticated: true, 
+        user: adminUser,
+        onSectionChange
+      })} />)
+      
+      fireEvent.click(screen.getByText('Gear Moderation'))
+      expect(onSectionChange).toHaveBeenCalledWith('admin-gear')
+    })
+  })
 })

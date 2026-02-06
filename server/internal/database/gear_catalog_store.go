@@ -595,7 +595,8 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 
 // MigrateInventoryItem creates a catalog entry from an existing inventory item
 // and links the inventory item to it. Uses a transaction to ensure consistency.
-func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryItemID, userID, name, manufacturer string, category models.EquipmentCategory, specs json.RawMessage, imageURL string) (*models.GearCatalogItem, error) {
+// Note: Does NOT copy image data from inventory - catalog images require admin curation.
+func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryItemID, userID, name, manufacturer string, category models.EquipmentCategory, specs json.RawMessage) (*models.GearCatalogItem, error) {
 	// Start a transaction to ensure atomic create+link
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -624,13 +625,13 @@ func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryIt
 	err = tx.QueryRowContext(ctx, checkQuery, canonicalKey).Scan(&catalogID)
 
 	if err == sql.ErrNoRows {
-		// Create new catalog entry
+		// Create new catalog entry - image_status='missing' enforces admin curation
 		catalogID = uuid.New().String()
 		insertQuery := `
-			INSERT INTO gear_catalog (id, gear_type, brand, model, variant, specs, source, created_by_user_id, status, canonical_key, image_url, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, 'user', $7, 'active', $8, $9, NOW(), NOW())
+			INSERT INTO gear_catalog (id, gear_type, brand, model, variant, specs, source, created_by_user_id, status, canonical_key, image_status, description_status, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, 'user', $7, 'active', $8, 'missing', 'missing', NOW(), NOW())
 		`
-		_, err = tx.ExecContext(ctx, insertQuery, catalogID, gearType, brand, model, variant, specs, userID, canonicalKey, imageURL)
+		_, err = tx.ExecContext(ctx, insertQuery, catalogID, gearType, brand, model, variant, specs, userID, canonicalKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create catalog entry: %w", err)
 		}
@@ -779,25 +780,73 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 
 // AdminUpdate updates a gear catalog item with admin-provided values
 func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUserID string, params models.AdminUpdateGearCatalogParams) (*models.GearCatalogItem, error) {
+	// If brand/model/variant is changing, we need to recompute canonical_key
+	needsCanonicalKeyUpdate := params.Brand != nil || params.Model != nil || params.Variant != nil
+
+	var currentItem *models.GearCatalogItem
+	var err error
+	if needsCanonicalKeyUpdate {
+		currentItem, err = s.Get(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current item: %w", err)
+		}
+		if currentItem == nil {
+			return nil, fmt.Errorf("catalog item not found: %s", id)
+		}
+	}
+
 	var sets []string
 	var args []interface{}
 	argIdx := 1
+
+	// Track effective values for canonical key computation
+	var effectiveBrand, effectiveModel, effectiveVariant string
+	var effectiveGearType models.GearType
+
+	if needsCanonicalKeyUpdate {
+		effectiveBrand = currentItem.Brand
+		effectiveModel = currentItem.Model
+		effectiveVariant = currentItem.Variant
+		effectiveGearType = currentItem.GearType
+	}
 
 	if params.Brand != nil {
 		sets = append(sets, fmt.Sprintf("brand = $%d", argIdx))
 		args = append(args, *params.Brand)
 		argIdx++
+		effectiveBrand = *params.Brand
 	}
 	if params.Model != nil {
 		sets = append(sets, fmt.Sprintf("model = $%d", argIdx))
 		args = append(args, *params.Model)
 		argIdx++
+		effectiveModel = *params.Model
 	}
 	if params.Variant != nil {
 		sets = append(sets, fmt.Sprintf("variant = $%d", argIdx))
 		args = append(args, *params.Variant)
 		argIdx++
+		effectiveVariant = *params.Variant
 	}
+
+	// Recompute canonical_key if brand/model/variant changed
+	if needsCanonicalKeyUpdate {
+		newCanonicalKey := models.BuildCanonicalKey(effectiveGearType, effectiveBrand, effectiveModel, effectiveVariant)
+		// Check if new canonical_key would conflict with another item
+		if newCanonicalKey != currentItem.CanonicalKey {
+			existing, err := s.GetByCanonicalKey(ctx, newCanonicalKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check for canonical key conflict: %w", err)
+			}
+			if existing != nil {
+				return nil, fmt.Errorf("cannot update: another item already exists with brand=%q model=%q variant=%q", effectiveBrand, effectiveModel, effectiveVariant)
+			}
+			sets = append(sets, fmt.Sprintf("canonical_key = $%d", argIdx))
+			args = append(args, newCanonicalKey)
+			argIdx++
+		}
+	}
+
 	if params.Description != nil {
 		sets = append(sets, fmt.Sprintf("description = $%d", argIdx))
 		args = append(args, *params.Description)
@@ -811,9 +860,18 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 			args = append(args, adminUserID)
 			argIdx++
 			sets = append(sets, "description_curated_at = NOW()")
+		} else {
+			// Clearing description - reset curation status
+			sets = append(sets, fmt.Sprintf("description_status = $%d", argIdx))
+			args = append(args, models.ImageStatusMissing)
+			argIdx++
+			sets = append(sets, "description_curated_by_user_id = NULL")
+			sets = append(sets, "description_curated_at = NULL")
 		}
 	}
-	if params.MSRP != nil {
+	if params.ClearMSRP {
+		sets = append(sets, "msrp = NULL")
+	} else if params.MSRP != nil {
 		sets = append(sets, fmt.Sprintf("msrp = $%d", argIdx))
 		args = append(args, *params.MSRP)
 		argIdx++
@@ -831,6 +889,15 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 			args = append(args, adminUserID)
 			argIdx++
 			sets = append(sets, "image_curated_at = NOW()")
+		} else {
+			// Clearing imageURL - reset curation status (also clear binary image data)
+			sets = append(sets, fmt.Sprintf("image_status = $%d", argIdx))
+			args = append(args, models.ImageStatusMissing)
+			argIdx++
+			sets = append(sets, "image_curated_by_user_id = NULL")
+			sets = append(sets, "image_curated_at = NULL")
+			sets = append(sets, "image_data = NULL")
+			sets = append(sets, "image_type = NULL")
 		}
 	}
 
@@ -846,7 +913,7 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 		WHERE id = $%d
 	`, strings.Join(sets, ", "), argIdx)
 
-	_, err := s.db.ExecContext(ctx, query, args...)
+	_, err = s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to admin update catalog item: %w", err)
 	}
@@ -926,9 +993,15 @@ func (s *GearCatalogStore) DeleteImage(ctx context.Context, id string) error {
 		    updated_at = NOW()
 		WHERE id = $2
 	`
-	_, err := s.db.ExecContext(ctx, query, models.ImageStatusMissing, id)
+	result, err := s.db.ExecContext(ctx, query, models.ImageStatusMissing, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete gear image: %w", err)
 	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("catalog item not found: %s", id)
+	}
+
 	return nil
 }
