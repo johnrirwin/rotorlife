@@ -50,25 +50,34 @@ func (s *GearCatalogStore) Create(ctx context.Context, userID string, params mod
 	query := `
 		INSERT INTO gear_catalog (
 			gear_type, brand, model, variant, specs, best_for, msrp, source,
-			created_by_user_id, status, canonical_key, image_url, description
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			created_by_user_id, status, canonical_key, description,
+			image_status, description_status
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, created_at, updated_at
 	`
 
 	item := &models.GearCatalogItem{
-		GearType:        params.GearType,
-		Brand:           strings.TrimSpace(params.Brand),
-		Model:           strings.TrimSpace(params.Model),
-		Variant:         strings.TrimSpace(params.Variant),
-		Specs:           specs,
-		BestFor:         params.BestFor,
-		MSRP:            params.MSRP,
-		Source:          models.CatalogSourceUserSubmitted,
-		CreatedByUserID: userID,
-		Status:          models.CatalogStatusActive,
-		CanonicalKey:    canonicalKey,
-		ImageURL:        params.ImageURL,
-		Description:     params.Description,
+		GearType:          params.GearType,
+		Brand:             strings.TrimSpace(params.Brand),
+		Model:             strings.TrimSpace(params.Model),
+		Variant:           strings.TrimSpace(params.Variant),
+		Specs:             specs,
+		BestFor:           params.BestFor,
+		MSRP:              params.MSRP,
+		Source:            models.CatalogSourceUserSubmitted,
+		CreatedByUserID:   userID,
+		Status:            models.CatalogStatusActive,
+		CanonicalKey:      canonicalKey,
+		Description:       params.Description,
+		ImageStatus:       models.ImageStatusMissing,
+		DescriptionStatus: models.ImageStatusMissing,
+	}
+
+	// Set description status based on whether description was provided
+	descriptionStatus := models.ImageStatusMissing
+	if strings.TrimSpace(params.Description) != "" {
+		descriptionStatus = models.ImageStatusApproved
+		item.DescriptionStatus = descriptionStatus
 	}
 
 	var createdByUserIDPtr *string
@@ -79,7 +88,8 @@ func (s *GearCatalogStore) Create(ctx context.Context, userID string, params mod
 	err = s.db.QueryRowContext(ctx, query,
 		item.GearType, item.Brand, item.Model, nullString(item.Variant),
 		item.Specs, pq.Array(item.BestFor), item.MSRP, item.Source, createdByUserIDPtr, item.Status,
-		item.CanonicalKey, nullString(item.ImageURL), nullString(item.Description),
+		item.CanonicalKey, nullString(item.Description),
+		item.ImageStatus, descriptionStatus,
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
@@ -108,13 +118,17 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key, image_url, description,
 			   created_at, updated_at,
-			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
+			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
+			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
+			   COALESCE(description_status, 'missing'), description_curated_by_user_id, description_curated_at
 		FROM gear_catalog
 		WHERE id = $1
 	`
 
 	item := &models.GearCatalogItem{}
 	var variant, imageURL, description, createdByUserID sql.NullString
+	var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
+	var imageCuratedAt, descriptionCuratedAt sql.NullTime
 	var msrp sql.NullFloat64
 
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
@@ -122,6 +136,8 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 		&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
 		&item.CanonicalKey, &imageURL, &description,
 		&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
+		&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
+		&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -138,6 +154,18 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 	if msrp.Valid {
 		item.MSRP = &msrp.Float64
 	}
+	if imageCuratedByUserID.Valid {
+		item.ImageCuratedByUserID = imageCuratedByUserID.String
+	}
+	if imageCuratedAt.Valid {
+		item.ImageCuratedAt = &imageCuratedAt.Time
+	}
+	if descriptionCuratedByUserID.Valid {
+		item.DescriptionCuratedByUserID = descriptionCuratedByUserID.String
+	}
+	if descriptionCuratedAt.Valid {
+		item.DescriptionCuratedAt = &descriptionCuratedAt.Time
+	}
 
 	return item, nil
 }
@@ -148,13 +176,17 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key, image_url, description,
 			   created_at, updated_at,
-			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
+			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
+			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
+			   COALESCE(description_status, 'missing'), description_curated_by_user_id, description_curated_at
 		FROM gear_catalog
 		WHERE canonical_key = $1
 	`
 
 	item := &models.GearCatalogItem{}
 	var variant, imageURL, description, createdByUserID sql.NullString
+	var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
+	var imageCuratedAt, descriptionCuratedAt sql.NullTime
 	var msrp sql.NullFloat64
 
 	err := s.db.QueryRowContext(ctx, query, canonicalKey).Scan(
@@ -162,6 +194,8 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 		&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
 		&item.CanonicalKey, &imageURL, &description,
 		&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
+		&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
+		&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -177,6 +211,18 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 	item.CreatedByUserID = createdByUserID.String
 	if msrp.Valid {
 		item.MSRP = &msrp.Float64
+	}
+	if imageCuratedByUserID.Valid {
+		item.ImageCuratedByUserID = imageCuratedByUserID.String
+	}
+	if imageCuratedAt.Valid {
+		item.ImageCuratedAt = &imageCuratedAt.Time
+	}
+	if descriptionCuratedByUserID.Valid {
+		item.DescriptionCuratedByUserID = descriptionCuratedByUserID.String
+	}
+	if descriptionCuratedAt.Valid {
+		item.DescriptionCuratedAt = &descriptionCuratedAt.Time
 	}
 
 	return item, nil
@@ -260,7 +306,9 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key, image_url, description,
 			   created_at, updated_at,
-			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
+			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
+			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
+			   COALESCE(description_status, 'missing'), description_curated_by_user_id, description_curated_at
 		FROM gear_catalog
 		WHERE %s
 		ORDER BY %s
@@ -279,6 +327,8 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	for rows.Next() {
 		var item models.GearCatalogItem
 		var variant, imageURL, description, createdByUserID sql.NullString
+		var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
+		var imageCuratedAt, descriptionCuratedAt sql.NullTime
 		var msrp sql.NullFloat64
 
 		if err := rows.Scan(
@@ -286,6 +336,8 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
 			&item.CanonicalKey, &imageURL, &description,
 			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
+			&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
+			&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan catalog item: %w", err)
 		}
@@ -296,6 +348,18 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 		item.CreatedByUserID = createdByUserID.String
 		if msrp.Valid {
 			item.MSRP = &msrp.Float64
+		}
+		if imageCuratedByUserID.Valid {
+			item.ImageCuratedByUserID = imageCuratedByUserID.String
+		}
+		if imageCuratedAt.Valid {
+			item.ImageCuratedAt = &imageCuratedAt.Time
+		}
+		if descriptionCuratedByUserID.Valid {
+			item.DescriptionCuratedByUserID = descriptionCuratedByUserID.String
+		}
+		if descriptionCuratedAt.Valid {
+			item.DescriptionCuratedAt = &descriptionCuratedAt.Time
 		}
 
 		items = append(items, item)
@@ -463,7 +527,9 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key, image_url, description,
 			   created_at, updated_at,
-			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
+			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
+			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
+			   COALESCE(description_status, 'missing'), description_curated_by_user_id, description_curated_at
 		FROM gear_catalog
 		WHERE status = 'active'
 		  AND ($1 = '' OR gear_type = $1)
@@ -486,6 +552,8 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 	for rows.Next() {
 		var item models.GearCatalogItem
 		var variant, imageURL, description, createdByUserID sql.NullString
+		var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
+		var imageCuratedAt, descriptionCuratedAt sql.NullTime
 		var msrp sql.NullFloat64
 
 		if err := rows.Scan(
@@ -493,6 +561,8 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
 			&item.CanonicalKey, &imageURL, &description,
 			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
+			&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
+			&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan popular item: %w", err)
 		}
@@ -504,6 +574,18 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 		if msrp.Valid {
 			item.MSRP = &msrp.Float64
 		}
+		if imageCuratedByUserID.Valid {
+			item.ImageCuratedByUserID = imageCuratedByUserID.String
+		}
+		if imageCuratedAt.Valid {
+			item.ImageCuratedAt = &imageCuratedAt.Time
+		}
+		if descriptionCuratedByUserID.Valid {
+			item.DescriptionCuratedByUserID = descriptionCuratedByUserID.String
+		}
+		if descriptionCuratedAt.Valid {
+			item.DescriptionCuratedAt = &descriptionCuratedAt.Time
+		}
 
 		items = append(items, item)
 	}
@@ -513,7 +595,8 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 
 // MigrateInventoryItem creates a catalog entry from an existing inventory item
 // and links the inventory item to it. Uses a transaction to ensure consistency.
-func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryItemID, userID, name, manufacturer string, category models.EquipmentCategory, specs json.RawMessage, imageURL string) (*models.GearCatalogItem, error) {
+// Note: Does NOT copy image data from inventory - catalog images require admin curation.
+func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryItemID, userID, name, manufacturer string, category models.EquipmentCategory, specs json.RawMessage) (*models.GearCatalogItem, error) {
 	// Start a transaction to ensure atomic create+link
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -542,13 +625,13 @@ func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryIt
 	err = tx.QueryRowContext(ctx, checkQuery, canonicalKey).Scan(&catalogID)
 
 	if err == sql.ErrNoRows {
-		// Create new catalog entry
+		// Create new catalog entry - image_status='missing' enforces admin curation
 		catalogID = uuid.New().String()
 		insertQuery := `
-			INSERT INTO gear_catalog (id, gear_type, brand, model, variant, specs, source, created_by_user_id, status, canonical_key, image_url, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, 'user', $7, 'active', $8, $9, NOW(), NOW())
+			INSERT INTO gear_catalog (id, gear_type, brand, model, variant, specs, source, created_by_user_id, status, canonical_key, image_status, description_status, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, 'user', $7, 'active', $8, 'missing', 'missing', NOW(), NOW())
 		`
-		_, err = tx.ExecContext(ctx, insertQuery, catalogID, gearType, brand, model, variant, specs, userID, canonicalKey, imageURL)
+		_, err = tx.ExecContext(ctx, insertQuery, catalogID, gearType, brand, model, variant, specs, userID, canonicalKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create catalog entry: %w", err)
 		}
@@ -570,4 +653,355 @@ func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryIt
 
 	// Fetch the full catalog item to return
 	return s.Get(ctx, catalogID)
+}
+
+// AdminSearch searches for gear items with admin-specific filters (like imageStatus)
+func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminGearSearchParams) (*models.GearCatalogSearchResponse, error) {
+	// Default limit
+	if params.Limit <= 0 {
+		params.Limit = 20
+	}
+	if params.Limit > 100 {
+		params.Limit = 100
+	}
+
+	// Build WHERE clauses
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+	argIdx := 1
+
+	if params.GearType != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("gear_type = $%d", argIdx))
+		args = append(args, params.GearType)
+		argIdx++
+	}
+
+	if params.Brand != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("LOWER(brand) LIKE LOWER($%d)", argIdx))
+		args = append(args, "%"+params.Brand+"%")
+		argIdx++
+	}
+
+	if params.ImageStatus != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("COALESCE(image_status, 'missing') = $%d", argIdx))
+		args = append(args, params.ImageStatus)
+		argIdx++
+	}
+
+	// Text search
+	if params.Query != "" {
+		searchClause := fmt.Sprintf(`(
+			LOWER(brand || ' ' || model || ' ' || COALESCE(variant, '')) LIKE LOWER($%d)
+		)`, argIdx)
+		whereClauses = append(whereClauses, searchClause)
+		args = append(args, "%"+params.Query+"%")
+		argIdx++
+	}
+
+	whereClause := strings.Join(whereClauses, " AND ")
+
+	// Count query
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM gear_catalog WHERE %s", whereClause)
+	var totalCount int
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, fmt.Errorf("failed to count catalog items: %w", err)
+	}
+
+	// Main query - order by most recent first for admin review
+	query := fmt.Sprintf(`
+		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
+			   created_by_user_id, status, canonical_key, image_url, description,
+			   created_at, updated_at,
+			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
+			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
+			   COALESCE(description_status, 'missing'), description_curated_by_user_id, description_curated_at
+		FROM gear_catalog
+		WHERE %s
+		ORDER BY created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, whereClause, argIdx, argIdx+1)
+
+	args = append(args, params.Limit, params.Offset)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to admin search catalog: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.GearCatalogItem, 0)
+	for rows.Next() {
+		var item models.GearCatalogItem
+		var variant, imageURL, description, createdByUserID sql.NullString
+		var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
+		var imageCuratedAt, descriptionCuratedAt sql.NullTime
+		var msrp sql.NullFloat64
+
+		if err := rows.Scan(
+			&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
+			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
+			&item.CanonicalKey, &imageURL, &description,
+			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
+			&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
+			&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan admin catalog item: %w", err)
+		}
+
+		item.Variant = variant.String
+		item.ImageURL = imageURL.String
+		item.Description = description.String
+		item.CreatedByUserID = createdByUserID.String
+		if msrp.Valid {
+			item.MSRP = &msrp.Float64
+		}
+		if imageCuratedByUserID.Valid {
+			item.ImageCuratedByUserID = imageCuratedByUserID.String
+		}
+		if imageCuratedAt.Valid {
+			item.ImageCuratedAt = &imageCuratedAt.Time
+		}
+		if descriptionCuratedByUserID.Valid {
+			item.DescriptionCuratedByUserID = descriptionCuratedByUserID.String
+		}
+		if descriptionCuratedAt.Valid {
+			item.DescriptionCuratedAt = &descriptionCuratedAt.Time
+		}
+
+		items = append(items, item)
+	}
+
+	return &models.GearCatalogSearchResponse{
+		Items:      items,
+		TotalCount: totalCount,
+		Query:      params.Query,
+	}, nil
+}
+
+// AdminUpdate updates a gear catalog item with admin-provided values
+func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUserID string, params models.AdminUpdateGearCatalogParams) (*models.GearCatalogItem, error) {
+	// If brand/model/variant is changing, we need to recompute canonical_key
+	needsCanonicalKeyUpdate := params.Brand != nil || params.Model != nil || params.Variant != nil
+
+	var currentItem *models.GearCatalogItem
+	var err error
+	if needsCanonicalKeyUpdate {
+		currentItem, err = s.Get(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current item: %w", err)
+		}
+		if currentItem == nil {
+			return nil, fmt.Errorf("catalog item not found: %s", id)
+		}
+	}
+
+	var sets []string
+	var args []interface{}
+	argIdx := 1
+
+	// Track effective values for canonical key computation
+	var effectiveBrand, effectiveModel, effectiveVariant string
+	var effectiveGearType models.GearType
+
+	if needsCanonicalKeyUpdate {
+		effectiveBrand = currentItem.Brand
+		effectiveModel = currentItem.Model
+		effectiveVariant = currentItem.Variant
+		effectiveGearType = currentItem.GearType
+	}
+
+	if params.Brand != nil {
+		sets = append(sets, fmt.Sprintf("brand = $%d", argIdx))
+		args = append(args, *params.Brand)
+		argIdx++
+		effectiveBrand = *params.Brand
+	}
+	if params.Model != nil {
+		sets = append(sets, fmt.Sprintf("model = $%d", argIdx))
+		args = append(args, *params.Model)
+		argIdx++
+		effectiveModel = *params.Model
+	}
+	if params.Variant != nil {
+		sets = append(sets, fmt.Sprintf("variant = $%d", argIdx))
+		args = append(args, *params.Variant)
+		argIdx++
+		effectiveVariant = *params.Variant
+	}
+
+	// Recompute canonical_key if brand/model/variant changed
+	if needsCanonicalKeyUpdate {
+		newCanonicalKey := models.BuildCanonicalKey(effectiveGearType, effectiveBrand, effectiveModel, effectiveVariant)
+		// Check if new canonical_key would conflict with another item
+		if newCanonicalKey != currentItem.CanonicalKey {
+			existing, err := s.GetByCanonicalKey(ctx, newCanonicalKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check for canonical key conflict: %w", err)
+			}
+			if existing != nil {
+				return nil, fmt.Errorf("cannot update: another item already exists with brand=%q model=%q variant=%q", effectiveBrand, effectiveModel, effectiveVariant)
+			}
+			sets = append(sets, fmt.Sprintf("canonical_key = $%d", argIdx))
+			args = append(args, newCanonicalKey)
+			argIdx++
+		}
+	}
+
+	if params.Description != nil {
+		sets = append(sets, fmt.Sprintf("description = $%d", argIdx))
+		args = append(args, *params.Description)
+		argIdx++
+		// Update description curation fields
+		if *params.Description != "" {
+			sets = append(sets, fmt.Sprintf("description_status = $%d", argIdx))
+			args = append(args, models.ImageStatusApproved)
+			argIdx++
+			sets = append(sets, fmt.Sprintf("description_curated_by_user_id = $%d", argIdx))
+			args = append(args, adminUserID)
+			argIdx++
+			sets = append(sets, "description_curated_at = NOW()")
+		} else {
+			// Clearing description - reset curation status
+			sets = append(sets, fmt.Sprintf("description_status = $%d", argIdx))
+			args = append(args, models.ImageStatusMissing)
+			argIdx++
+			sets = append(sets, "description_curated_by_user_id = NULL")
+			sets = append(sets, "description_curated_at = NULL")
+		}
+	}
+	if params.ClearMSRP {
+		sets = append(sets, "msrp = NULL")
+	} else if params.MSRP != nil {
+		sets = append(sets, fmt.Sprintf("msrp = $%d", argIdx))
+		args = append(args, *params.MSRP)
+		argIdx++
+	}
+	if params.ImageURL != nil {
+		sets = append(sets, fmt.Sprintf("image_url = $%d", argIdx))
+		args = append(args, *params.ImageURL)
+		argIdx++
+		// Update image curation fields
+		if *params.ImageURL != "" {
+			sets = append(sets, fmt.Sprintf("image_status = $%d", argIdx))
+			args = append(args, models.ImageStatusApproved)
+			argIdx++
+			sets = append(sets, fmt.Sprintf("image_curated_by_user_id = $%d", argIdx))
+			args = append(args, adminUserID)
+			argIdx++
+			sets = append(sets, "image_curated_at = NOW()")
+		} else {
+			// Clearing imageURL - reset curation status (also clear binary image data)
+			sets = append(sets, fmt.Sprintf("image_status = $%d", argIdx))
+			args = append(args, models.ImageStatusMissing)
+			argIdx++
+			sets = append(sets, "image_curated_by_user_id = NULL")
+			sets = append(sets, "image_curated_at = NULL")
+			sets = append(sets, "image_data = NULL")
+			sets = append(sets, "image_type = NULL")
+		}
+	}
+
+	if len(sets) == 0 {
+		return s.Get(ctx, id)
+	}
+
+	sets = append(sets, "updated_at = NOW()")
+	args = append(args, id)
+
+	query := fmt.Sprintf(`
+		UPDATE gear_catalog SET %s
+		WHERE id = $%d
+	`, strings.Join(sets, ", "), argIdx)
+
+	_, err = s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to admin update catalog item: %w", err)
+	}
+
+	return s.Get(ctx, id)
+}
+
+// SetImage stores the binary image data for a gear catalog item (admin only)
+func (s *GearCatalogStore) SetImage(ctx context.Context, id string, adminUserID string, imageType string, imageData []byte) error {
+	query := `
+		UPDATE gear_catalog 
+		SET image_data = $1, 
+		    image_type = $2, 
+		    image_url = NULL,
+		    image_status = $3,
+		    image_curated_by_user_id = $4,
+		    image_curated_at = NOW(),
+		    updated_at = NOW()
+		WHERE id = $5
+	`
+	result, err := s.db.ExecContext(ctx, query, imageData, imageType, models.ImageStatusApproved, adminUserID, id)
+	if err != nil {
+		return fmt.Errorf("failed to set gear image: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("gear catalog item not found")
+	}
+
+	return nil
+}
+
+// GetImage retrieves the binary image data for a gear catalog item
+func (s *GearCatalogStore) GetImage(ctx context.Context, id string) ([]byte, string, error) {
+	query := `
+		SELECT image_data, image_type 
+		FROM gear_catalog 
+		WHERE id = $1 AND image_data IS NOT NULL
+	`
+	var imageData []byte
+	var imageType string
+	err := s.db.QueryRowContext(ctx, query, id).Scan(&imageData, &imageType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, "", nil
+		}
+		return nil, "", fmt.Errorf("failed to get gear image: %w", err)
+	}
+
+	return imageData, imageType, nil
+}
+
+// HasImage checks if a gear catalog item has an uploaded image
+func (s *GearCatalogStore) HasImage(ctx context.Context, id string) (bool, error) {
+	query := `SELECT image_data IS NOT NULL FROM gear_catalog WHERE id = $1`
+	var hasImage bool
+	err := s.db.QueryRowContext(ctx, query, id).Scan(&hasImage)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check for gear image: %w", err)
+	}
+	return hasImage, nil
+}
+
+// DeleteImage removes the image from a gear catalog item (admin only)
+func (s *GearCatalogStore) DeleteImage(ctx context.Context, id string) error {
+	query := `
+		UPDATE gear_catalog 
+		SET image_data = NULL, 
+		    image_type = NULL, 
+		    image_status = $1,
+		    image_curated_by_user_id = NULL,
+		    image_curated_at = NULL,
+		    updated_at = NOW()
+		WHERE id = $2
+	`
+	result, err := s.db.ExecContext(ctx, query, models.ImageStatusMissing, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete gear image: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("catalog item not found: %s", id)
+	}
+
+	return nil
 }
