@@ -69,6 +69,9 @@ function App() {
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Feed scroll state for collapsible TopBar on mobile
+  const [isFeedScrolled, setIsFeedScrolled] = useState(false);
+
   // Track previous auth state to detect logout
   const [wasAuthenticated, setWasAuthenticated] = useState<boolean | null>(null);
 
@@ -412,6 +415,17 @@ function App() {
     }
   }, [filters.sources, filters.sourceType, filters.sort, filters.fromDate, filters.toDate, debouncedQuery, startCooldown]);
 
+  // Handle feed scroll for collapsible TopBar on mobile
+  const handleFeedScroll = useCallback((scrollTop: number) => {
+    // Only track scroll state on mobile (md breakpoint is 768px)
+    if (window.innerWidth >= 768) {
+      setIsFeedScrolled(false);
+      return;
+    }
+    // Collapse after scrolling 50px, expand when near top
+    setIsFeedScrolled(scrollTop > 50);
+  }, []);
+
   // Equipment search handler
   const handleEquipmentSearchChange = useCallback((params: Partial<EquipmentSearchParams>) => {
     setEquipmentSearchParams(prev => ({ ...prev, ...params }));
@@ -728,6 +742,7 @@ function App() {
               isRefreshing={isRefreshing}
               refreshCooldown={refreshCooldown}
               totalCount={totalCount}
+              isCollapsed={isFeedScrolled}
             />
             <FeedList
               items={items}
@@ -737,6 +752,7 @@ function App() {
               onItemClick={setSelectedItem}
               hasMore={items.length < totalCount}
               onLoadMore={loadMoreItems}
+              onScroll={handleFeedScroll}
             />
           </>
         )}

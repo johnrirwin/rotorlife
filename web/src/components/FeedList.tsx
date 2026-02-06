@@ -9,9 +9,10 @@ interface FeedListProps {
   onItemClick: (item: FeedItem) => void;
   hasMore?: boolean;
   onLoadMore?: () => void;
+  onScroll?: (scrollTop: number) => void;
 }
 
-export function FeedList({ items, sources, isLoading, error, onItemClick, hasMore = false, onLoadMore }: FeedListProps) {
+export function FeedList({ items, sources, isLoading, error, onItemClick, hasMore = false, onLoadMore, onScroll }: FeedListProps) {
   const sourceMap = new Map(sources.map(s => [s.id, s]));
 
   const { setLoadMoreRef } = useInfiniteScroll(
@@ -78,7 +79,10 @@ export function FeedList({ items, sources, isLoading, error, onItemClick, hasMor
 
   // Import FeedCard dynamically to avoid circular imports
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6">
+    <div 
+      className="flex-1 overflow-y-auto p-4 md:p-6"
+      onScroll={(e) => onScroll?.((e.target as HTMLDivElement).scrollTop)}
+    >
       <div className="space-y-3 md:space-y-4 max-w-4xl mx-auto">
         {items.map(item => (
           <FeedCardWrapper
