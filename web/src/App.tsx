@@ -69,9 +69,6 @@ function App() {
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Feed scroll state for collapsible TopBar on mobile
-  const [isFeedScrolled, setIsFeedScrolled] = useState(false);
-
   // Track previous auth state to detect logout
   const [wasAuthenticated, setWasAuthenticated] = useState<boolean | null>(null);
 
@@ -415,25 +412,16 @@ function App() {
     }
   }, [filters.sources, filters.sourceType, filters.sort, filters.fromDate, filters.toDate, debouncedQuery, startCooldown]);
 
-  // Handle feed scroll for collapsible TopBar on mobile
+  // Handle feed scroll - dismiss keyboard on mobile when scrolling
   const lastScrollTop = useRef(0);
   const handleFeedScroll = useCallback((scrollTop: number) => {
-    // Only track scroll state on mobile (md breakpoint is 768px)
-    if (window.innerWidth >= 768) {
-      setIsFeedScrolled(false);
-      return;
-    }
-    
-    // Blur active element when scrolling down to dismiss keyboard
+    // Blur active element when scrolling down to dismiss keyboard on mobile
     if (scrollTop > lastScrollTop.current && scrollTop > 10) {
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
       }
     }
     lastScrollTop.current = scrollTop;
-    
-    // Collapse after scrolling 50px, expand when near top
-    setIsFeedScrolled(scrollTop > 50);
   }, []);
 
   // Equipment search handler
@@ -736,11 +724,9 @@ function App() {
 
         {/* News Section */}
         {activeSection === 'news' && (
-          <div 
-            className="flex-1 overflow-y-auto flex flex-col"
-            onScroll={(e) => handleFeedScroll((e.target as HTMLDivElement).scrollTop)}
-          >
-            <div className="sticky top-0 z-10">
+          <div className="flex-1 flex flex-col min-h-0 relative">
+            {/* Fixed TopBar within news section */}
+            <div className="flex-shrink-0 z-10 bg-slate-900">
               <TopBar
                 query={filters.query}
                 onQueryChange={q => updateFilter('query', q)}
@@ -756,18 +742,24 @@ function App() {
                 isRefreshing={isRefreshing}
                 refreshCooldown={refreshCooldown}
                 totalCount={totalCount}
-                isCollapsed={isFeedScrolled}
+                isCollapsed={false}
               />
             </div>
-            <FeedList
-              items={items}
-              sources={sources}
-              isLoading={isLoading || isLoadingMore}
-              error={error}
-              onItemClick={setSelectedItem}
-              hasMore={items.length < totalCount}
-              onLoadMore={loadMoreItems}
-            />
+            {/* Scrollable feed list */}
+            <div 
+              className="flex-1 overflow-y-auto min-h-0"
+              onScroll={(e) => handleFeedScroll((e.target as HTMLDivElement).scrollTop)}
+            >
+              <FeedList
+                items={items}
+                sources={sources}
+                isLoading={isLoading || isLoadingMore}
+                error={error}
+                onItemClick={setSelectedItem}
+                hasMore={items.length < totalCount}
+                onLoadMore={loadMoreItems}
+              />
+            </div>
           </div>
         )}
 

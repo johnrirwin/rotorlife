@@ -78,7 +78,7 @@ export function FeedList({ items, sources, isLoading, error, onItemClick, hasMor
 
   // Import FeedCard dynamically to avoid circular imports
   return (
-    <div className="flex-1 p-4 md:p-6">
+    <div className="p-4 md:p-6">
       <div className="space-y-3 md:space-y-4 max-w-4xl mx-auto">
         {items.map(item => (
           <FeedCardWrapper
