@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef } from 'react';
 import type { SourceType } from '../types';
 
 interface TopBarProps {
@@ -37,14 +37,6 @@ export function TopBar({
   isCollapsed = false,
 }: TopBarProps) {
   const headerRef = useRef<HTMLElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Dismiss keyboard when scrolling starts
-  useEffect(() => {
-    if (isCollapsed) {
-      searchInputRef.current?.blur();
-    }
-  }, [isCollapsed]);
 
   // Show filters when not collapsed (at top of scroll)
   const showFilters = !isCollapsed;
@@ -84,7 +76,6 @@ export function TopBar({
               />
             </svg>
             <input
-              ref={searchInputRef}
               type="text"
               placeholder="Search news..."
               value={query}
