@@ -159,14 +159,14 @@ type GearCatalogItem struct {
 	UpdatedAt       time.Time         `json:"updatedAt"`
 
 	// Image curation fields
-	ImageStatus         ImageStatus `json:"imageStatus"`
-	ImageCuratedByUserID string     `json:"imageCuratedByUserId,omitempty"`
-	ImageCuratedAt      *time.Time  `json:"imageCuratedAt,omitempty"`
+	ImageStatus          ImageStatus `json:"imageStatus"`
+	ImageCuratedByUserID string      `json:"imageCuratedByUserId,omitempty"`
+	ImageCuratedAt       *time.Time  `json:"imageCuratedAt,omitempty"`
 
 	// Description curation fields
-	DescriptionStatus         ImageStatus `json:"descriptionStatus"`
-	DescriptionCuratedByUserID string     `json:"descriptionCuratedByUserId,omitempty"`
-	DescriptionCuratedAt      *time.Time  `json:"descriptionCuratedAt,omitempty"`
+	DescriptionStatus          ImageStatus `json:"descriptionStatus"`
+	DescriptionCuratedByUserID string      `json:"descriptionCuratedByUserId,omitempty"`
+	DescriptionCuratedAt       *time.Time  `json:"descriptionCuratedAt,omitempty"`
 }
 
 // DisplayName returns a formatted display name for the catalog item
