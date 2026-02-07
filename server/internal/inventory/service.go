@@ -51,6 +51,28 @@ func (s *Service) AddItem(ctx context.Context, userID string, params models.AddI
 		return nil, &ServiceError{Message: "invalid condition: " + string(params.Condition)}
 	}
 
+	// Use atomic UPSERT when catalog_id is provided to prevent duplicates from race conditions
+	if params.CatalogID != "" {
+		s.logger.Debug("Adding inventory item from catalog (using UPSERT)", logging.WithFields(map[string]interface{}{
+			"name":       params.Name,
+			"category":   params.Category,
+			"user_id":    userID,
+			"catalog_id": params.CatalogID,
+		}))
+
+		item, err := s.store.AddOrIncrement(ctx, userID, params)
+		if err != nil {
+			s.logger.Error("Failed to add/increment inventory item", logging.WithField("error", err.Error()))
+			return nil, err
+		}
+
+		s.logger.Info("Added/incremented inventory item", logging.WithFields(map[string]interface{}{
+			"id":       item.ID,
+			"quantity": item.Quantity,
+		}))
+		return item, nil
+	}
+
 	s.logger.Debug("Adding inventory item", logging.WithFields(map[string]interface{}{
 		"name":     params.Name,
 		"category": params.Category,

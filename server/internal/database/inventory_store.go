@@ -88,6 +88,93 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 	return item, nil
 }
 
+// AddOrIncrement atomically adds a new inventory item or increments quantity if one with the same
+// catalog_id already exists for the user (uses UPSERT). Only works when catalog_id is provided.
+func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, params models.AddInventoryParams) (*models.InventoryItem, error) {
+	if params.CatalogID == "" {
+		return nil, fmt.Errorf("AddOrIncrement requires a catalog_id")
+	}
+
+	var purchaseDate *time.Time
+	if params.PurchaseDate != "" {
+		t, err := time.Parse("2006-01-02", params.PurchaseDate)
+		if err == nil {
+			purchaseDate = &t
+		}
+	}
+
+	specs := params.Specs
+	if specs == nil {
+		specs = json.RawMessage(`{}`)
+	}
+
+	quantity := params.Quantity
+	if quantity <= 0 {
+		quantity = 1
+	}
+
+	condition := params.Condition
+	if condition == "" {
+		condition = models.ConditionNew
+	}
+
+	// UPSERT: insert if not exists, otherwise increment quantity
+	query := `
+		INSERT INTO inventory_items (
+			user_id, name, category, manufacturer, quantity, condition, notes,
+			build_id, purchase_price, purchase_date, purchase_seller,
+			product_url, image_url, specs, source_equipment_id, catalog_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		ON CONFLICT (user_id, catalog_id) WHERE catalog_id IS NOT NULL
+		DO UPDATE SET quantity = inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
+		RETURNING id, user_id, name, category, manufacturer, quantity, condition, notes,
+			build_id, purchase_price, purchase_date, purchase_seller,
+			product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
+	`
+
+	item := &models.InventoryItem{}
+	var itemUserID sql.NullString
+	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID, catalogID sql.NullString
+	var purchasePriceNull sql.NullFloat64
+	var purchaseDateNull sql.NullTime
+
+	err := s.db.QueryRowContext(ctx, query,
+		nullString(userID), params.Name, params.Category, params.Manufacturer, quantity, condition, params.Notes,
+		nullString(params.BuildID), params.PurchasePrice, purchaseDate, nullString(params.PurchaseSeller),
+		nullString(params.ProductURL), nullString(params.ImageURL), specs, nullString(params.SourceEquipmentID),
+		nullString(params.CatalogID),
+	).Scan(
+		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
+		&item.Quantity, &item.Condition, &item.Notes,
+		&buildID, &purchasePriceNull, &purchaseDateNull, &purchaseSeller,
+		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
+		&item.CreatedAt, &item.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert inventory item: %w", err)
+	}
+
+	if itemUserID.Valid {
+		item.UserID = itemUserID.String
+	}
+	item.BuildID = buildID.String
+	item.PurchaseSeller = purchaseSeller.String
+	item.ProductURL = productURL.String
+	item.ImageURL = imageURL.String
+	item.SourceEquipmentID = sourceEquipmentID.String
+	item.CatalogID = catalogID.String
+
+	if purchasePriceNull.Valid {
+		item.PurchasePrice = &purchasePriceNull.Float64
+	}
+	if purchaseDateNull.Valid {
+		item.PurchaseDate = &purchaseDateNull.Time
+	}
+
+	return item, nil
+}
+
 // Get retrieves an inventory item by ID (optionally scoped to user)
 func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*models.InventoryItem, error) {
 	query := `
@@ -496,6 +583,88 @@ func (s *InventoryStore) GetSummary(ctx context.Context, userID string) (*models
 		ByCategory:  byCategory,
 		ByCondition: byCondition,
 	}, nil
+}
+
+// GetByCatalogID finds an inventory item by catalog ID for a user
+func (s *InventoryStore) GetByCatalogID(ctx context.Context, userID, catalogID string) (*models.InventoryItem, error) {
+	if catalogID == "" {
+		return nil, nil
+	}
+
+	query := `
+		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
+			   build_id, purchase_price, purchase_date, purchase_seller,
+			   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
+		FROM inventory_items
+		WHERE user_id = $1 AND catalog_id = $2
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+
+	item := &models.InventoryItem{}
+	var itemUserID sql.NullString
+	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID, itemCatalogID sql.NullString
+	var purchasePrice sql.NullFloat64
+	var purchaseDate sql.NullTime
+
+	err := s.db.QueryRowContext(ctx, query, userID, catalogID).Scan(
+		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
+		&item.Quantity, &item.Condition, &item.Notes,
+		&buildID, &purchasePrice, &purchaseDate, &purchaseSeller,
+		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &itemCatalogID,
+		&item.CreatedAt, &item.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inventory item by catalog ID: %w", err)
+	}
+
+	if itemUserID.Valid {
+		item.UserID = itemUserID.String
+	}
+	item.BuildID = buildID.String
+	item.PurchaseSeller = purchaseSeller.String
+	item.ProductURL = productURL.String
+	item.ImageURL = imageURL.String
+	item.SourceEquipmentID = sourceEquipmentID.String
+	item.CatalogID = itemCatalogID.String
+
+	if purchasePrice.Valid {
+		item.PurchasePrice = &purchasePrice.Float64
+	}
+	if purchaseDate.Valid {
+		item.PurchaseDate = &purchaseDate.Time
+	}
+
+	return item, nil
+}
+
+// IncrementQuantity increases the quantity of an existing inventory item
+func (s *InventoryStore) IncrementQuantity(ctx context.Context, id string, userID string, amount int) (*models.InventoryItem, error) {
+	if amount <= 0 {
+		return nil, fmt.Errorf("increment amount must be positive, got %d", amount)
+	}
+
+	query := `
+		UPDATE inventory_items 
+		SET quantity = quantity + $1, updated_at = NOW()
+		WHERE id = $2 AND user_id = $3
+		RETURNING id
+	`
+
+	var returnedID string
+	err := s.db.QueryRowContext(ctx, query, amount, id, userID).Scan(&returnedID)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("inventory item not found: %s", id)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to increment inventory quantity: %w", err)
+	}
+
+	return s.Get(ctx, id, userID)
 }
 
 // Helper function for nullable strings
