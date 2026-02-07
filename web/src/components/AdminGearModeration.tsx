@@ -230,7 +230,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
 
       {/* Scrollable list */}
       <div 
-        className="flex-1 overflow-y-auto min-h-0 px-4 md:px-6 pb-20"
+        className="flex-1 overflow-y-auto min-h-0 px-4 md:px-6 pt-4 md:pt-6 pb-20"
         onScroll={() => {
           // Dismiss keyboard on scroll for mobile
           if (document.activeElement instanceof HTMLElement) {
