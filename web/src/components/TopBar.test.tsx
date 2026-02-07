@@ -7,6 +7,7 @@ describe('TopBar', () => {
   const defaultProps = {
     query: '',
     onQueryChange: vi.fn(),
+    onSearch: vi.fn(),
     fromDate: '2024-01-01',
     toDate: '2024-01-31',
     onFromDateChange: vi.fn(),
@@ -45,26 +46,48 @@ describe('TopBar', () => {
   it('shows clear button when query is not empty', () => {
     render(<TopBar {...defaultProps} query="test" />)
 
-    // The clear button for the search input should be visible
-    const clearButton = screen.getByRole('button', { name: /clear search/i })
+    // The clear button should be visible
+    const clearButton = screen.getByRole('button', { name: /^Clear$/i })
     expect(clearButton).toBeInTheDocument()
   })
 
   it('does not show clear button in search input when query is empty', () => {
     render(<TopBar {...defaultProps} query="" />)
     
-    // The search input should not have the clear search button
-    const clearButton = screen.queryByRole('button', { name: /clear search/i })
+    // The search input should not have the clear button
+    const clearButton = screen.queryByRole('button', { name: /^Clear$/i })
     expect(clearButton).not.toBeInTheDocument()
   })
 
-  it('calls onQueryChange with empty string when clear clicked', () => {
+  it('calls onQueryChange with empty string and onSearch when clear clicked', () => {
     const onQueryChange = vi.fn()
-    render(<TopBar {...defaultProps} query="test" onQueryChange={onQueryChange} />)
+    const onSearch = vi.fn()
+    render(<TopBar {...defaultProps} query="test" onQueryChange={onQueryChange} onSearch={onSearch} />)
 
-    const clearButton = screen.getByRole('button', { name: /clear search/i })
+    const clearButton = screen.getByRole('button', { name: /^Clear$/i })
     fireEvent.click(clearButton)
     expect(onQueryChange).toHaveBeenCalledWith('')
+    expect(onSearch).toHaveBeenCalled()
+  })
+
+  it('calls onSearch when Search button is clicked', () => {
+    const onSearch = vi.fn()
+    render(<TopBar {...defaultProps} onSearch={onSearch} />)
+
+    const searchButton = screen.getByRole('button', { name: /^Search$/i })
+    fireEvent.click(searchButton)
+
+    expect(onSearch).toHaveBeenCalled()
+  })
+
+  it('calls onSearch when Enter key is pressed in search input', () => {
+    const onSearch = vi.fn()
+    render(<TopBar {...defaultProps} onSearch={onSearch} />)
+
+    const input = screen.getByPlaceholderText('Search news...')
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onSearch).toHaveBeenCalled()
   })
 
   it('renders date inputs', () => {

@@ -4,6 +4,7 @@ import type { SourceType } from '../types';
 interface TopBarProps {
   query: string;
   onQueryChange: (query: string) => void;
+  onSearch: () => void;
   fromDate: string;
   toDate: string;
   onFromDateChange: (date: string) => void;
@@ -22,6 +23,7 @@ interface TopBarProps {
 export function TopBar({
   query,
   onQueryChange,
+  onSearch,
   fromDate,
   toDate,
   onFromDateChange,
@@ -56,12 +58,25 @@ export function TopBar({
     return 'Refresh';
   };
 
+  // Handle enter key in search
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      onSearch();
+    }
+  };
+
+  // Handle clearing search
+  const handleClearSearch = () => {
+    onQueryChange('');
+    onSearch();
+  };
+
   return (
     <header ref={headerRef} className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
         {/* Search - full width on mobile */}
-        <div className="flex-1 min-w-0 md:min-w-[200px] md:max-w-md">
-          <div className="relative">
+        <div className="flex gap-2 flex-1 min-w-0 md:min-w-[200px] md:max-w-md">
+          <div className="relative flex-1">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
               fill="none"
@@ -80,20 +95,24 @@ export function TopBar({
               placeholder="Search news..."
               value={query}
               onChange={e => onQueryChange(e.target.value)}
+              onKeyDown={handleKeyDown}
               className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
-            {query && (
-              <button
-                onClick={() => onQueryChange('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                aria-label="Clear search"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
           </div>
+          <button
+            onClick={onSearch}
+            className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Search
+          </button>
+          {query && (
+            <button
+              onClick={handleClearSearch}
+              className="px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Filters row - collapsible on mobile, always visible on desktop */}

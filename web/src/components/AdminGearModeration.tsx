@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef, type FormEvent, type ChangeEv
 import type { GearCatalogItem, GearType, ImageStatus, AdminUpdateGearCatalogParams } from '../gearCatalogTypes';
 import { GEAR_TYPES } from '../gearCatalogTypes';
 import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminGetGear, getAdminGearImageUrl } from '../adminApi';
-import { useDebounce } from '../hooks';
 
 interface AdminGearModerationProps {
   isAdmin: boolean;
@@ -17,17 +16,13 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
 
   // Filters
   const [query, setQuery] = useState('');
+  const [appliedQuery, setAppliedQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>('');
   const [imageStatus, setImageStatus] = useState<ImageStatus | ''>(''); // Default to all items
   const pageSize = 30;
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  
-  // Debounce filter values for live search
-  const debouncedQuery = useDebounce(query, 300);
-  const debouncedGearType = useDebounce(gearType, 300);
-  const debouncedImageStatus = useDebounce(imageStatus, 300);
   
   // Use refs to track current offset and prevent race conditions
   const currentOffsetRef = useRef(0);
@@ -56,9 +51,9 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
 
     try {
       const response = await adminSearchGear({
-        query: debouncedQuery || undefined,
-        gearType: debouncedGearType || undefined,
-        imageStatus: debouncedImageStatus || undefined,
+        query: appliedQuery || undefined,
+        gearType: gearType || undefined,
+        imageStatus: imageStatus || undefined,
         limit: pageSize,
         offset: offset,
       });
@@ -78,14 +73,32 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
       setIsLoadingMore(false);
       isLoadingRef.current = false;
     }
-  }, [isAdmin, debouncedQuery, debouncedGearType, debouncedImageStatus]);
+  }, [isAdmin, appliedQuery, gearType, imageStatus]);
 
-  // Initial load and auto-search when debounced filters change
+  // Initial load and auto-search when filters change
   useEffect(() => {
     if (isAdmin) {
       loadItems(true);
     }
   }, [isAdmin, loadItems]);
+
+  // Handle search button click
+  const handleSearch = useCallback(() => {
+    setAppliedQuery(query);
+  }, [query]);
+
+  // Handle enter key in search input
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  // Handle clearing search
+  const handleClearSearch = () => {
+    setQuery('');
+    setAppliedQuery('');
+  };
 
   // Infinite scroll observer
   // Note: loadItems has a synchronous isLoadingRef guard that prevents concurrent calls,
@@ -152,37 +165,43 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
 
           {/* Filters */}
           <div className="flex flex-col gap-3">
-            {/* Search query - full width */}
-            <div className="relative">
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search brand or model..."
-                className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-              {query && (
-                <button
-                  onClick={() => setQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  aria-label="Clear search"
+            {/* Search query - full width with button */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Search brand or model..."
+                  className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={handleSearch}
+                className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Search
+              </button>
+              {appliedQuery && (
+                <button
+                  onClick={handleClearSearch}
+                  className="px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  Clear
                 </button>
               )}
             </div>
