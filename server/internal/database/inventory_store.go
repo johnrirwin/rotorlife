@@ -157,22 +157,36 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 // Get retrieves an inventory item by ID (optionally scoped to user)
 func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*models.InventoryItem, error) {
 	query := `
-		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
-			   build_id, purchase_price, purchase_seller,
-			   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
-		FROM inventory_items
-		WHERE id = $1
+		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.condition, i.notes,
+			   i.build_id, i.purchase_price, i.purchase_seller,
+			   i.product_url, 
+			   COALESCE(i.image_url, 
+			       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
+			            WHEN gc.image_data IS NOT NULL THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
+			            ELSE NULL END
+			   ) as image_url,
+			   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
+		FROM inventory_items i
+		LEFT JOIN gear_catalog gc ON i.catalog_id = gc.id
+		WHERE i.id = $1
 	`
 	args := []interface{}{id}
 
 	// If userID is provided, scope the query
 	if userID != "" {
 		query = `
-			SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
-				   build_id, purchase_price, purchase_seller,
-				   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
-			FROM inventory_items
-			WHERE id = $1 AND user_id = $2
+			SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.condition, i.notes,
+				   i.build_id, i.purchase_price, i.purchase_seller,
+				   i.product_url, 
+				   COALESCE(i.image_url, 
+				       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
+				            WHEN gc.image_data IS NOT NULL THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
+				            ELSE NULL END
+				   ) as image_url,
+				   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
+			FROM inventory_items i
+			LEFT JOIN gear_catalog gc ON i.catalog_id = gc.id
+			WHERE i.id = $1 AND i.user_id = $2
 		`
 		args = append(args, userID)
 	}
@@ -223,32 +237,32 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 
 	// Scope to user if userID is provided
 	if userID != "" {
-		conditions = append(conditions, fmt.Sprintf("user_id = $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("i.user_id = $%d", argIndex))
 		args = append(args, userID)
 		argIndex++
 	}
 
 	if params.Category != "" {
-		conditions = append(conditions, fmt.Sprintf("category = $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("i.category = $%d", argIndex))
 		args = append(args, params.Category)
 		argIndex++
 	}
 
 	if params.Condition != "" {
-		conditions = append(conditions, fmt.Sprintf("condition = $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("i.condition = $%d", argIndex))
 		args = append(args, params.Condition)
 		argIndex++
 	}
 
 	if params.BuildID != "" {
-		conditions = append(conditions, fmt.Sprintf("build_id = $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("i.build_id = $%d", argIndex))
 		args = append(args, params.BuildID)
 		argIndex++
 	}
 
 	if params.Query != "" {
 		conditions = append(conditions, fmt.Sprintf(
-			"(name ILIKE $%d OR manufacturer ILIKE $%d)",
+			"(i.name ILIKE $%d OR i.manufacturer ILIKE $%d)",
 			argIndex, argIndex,
 		))
 		args = append(args, "%"+params.Query+"%")
@@ -262,7 +276,7 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 
 	// Count total
 	var totalCount int
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inventory_items %s", whereClause)
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inventory_items i %s", whereClause)
 	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&totalCount); err != nil {
 		return nil, fmt.Errorf("failed to count inventory: %w", err)
 	}
@@ -275,11 +289,19 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 	offset := params.Offset
 
 	query := fmt.Sprintf(`
-		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
-			   build_id, purchase_price, purchase_seller,
-			   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
-		FROM inventory_items %s
-		ORDER BY created_at DESC
+		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.condition, i.notes,
+			   i.build_id, i.purchase_price, i.purchase_seller,
+			   i.product_url, 
+			   COALESCE(i.image_url, 
+			       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
+			            WHEN gc.image_data IS NOT NULL THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
+			            ELSE NULL END
+			   ) as image_url,
+			   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
+		FROM inventory_items i
+		LEFT JOIN gear_catalog gc ON i.catalog_id = gc.id
+		%s
+		ORDER BY i.created_at DESC
 		LIMIT $%d OFFSET $%d
 	`, whereClause, argIndex, argIndex+1)
 
@@ -550,12 +572,19 @@ func (s *InventoryStore) GetByCatalogID(ctx context.Context, userID, catalogID s
 	}
 
 	query := `
-		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
-			   build_id, purchase_price, purchase_seller,
-			   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
-		FROM inventory_items
-		WHERE user_id = $1 AND catalog_id = $2
-		ORDER BY created_at DESC
+		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.condition, i.notes,
+			   i.build_id, i.purchase_price, i.purchase_seller,
+			   i.product_url, 
+			   COALESCE(i.image_url, 
+			       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
+			            WHEN gc.image_data IS NOT NULL THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
+			            ELSE NULL END
+			   ) as image_url,
+			   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
+		FROM inventory_items i
+		LEFT JOIN gear_catalog gc ON i.catalog_id = gc.id
+		WHERE i.user_id = $1 AND i.catalog_id = $2
+		ORDER BY i.created_at DESC
 		LIMIT 1
 	`
 

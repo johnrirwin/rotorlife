@@ -40,7 +40,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
   const [purchaseSeller, setPurchaseSeller] = useState('');
   const [notes, setNotes] = useState('');
   const [buildId, setBuildId] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
 
   // Auto-add pre-selected catalog item to inventory
   const autoAddCatalogItem = useCallback(async (item: GearCatalogItem) => {
@@ -55,7 +54,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
         quantity: 1,
         condition: 'new',
         purchasePrice: item.msrp,
-        imageUrl: item.imageUrl,
         catalogId: item.id,
       };
 
@@ -101,7 +99,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setManufacturer(equipmentItem.manufacturer || '');
       setPurchasePrice(equipmentItem.price.toFixed(2));
       setPurchaseSeller(equipmentItem.seller);
-      setImageUrl(equipmentItem.imageUrl || '');
       setQuantity(1);
       setCondition('new');
       setNotes('');
@@ -116,7 +113,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setPurchaseSeller(editItem.purchaseSeller || '');
       setNotes(editItem.notes || '');
       setBuildId(editItem.buildId || '');
-      setImageUrl(editItem.imageUrl || '');
     } else {
       // Reset form
       setName('');
@@ -128,7 +124,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setPurchaseSeller('');
       setNotes('');
       setBuildId('');
-      setImageUrl('');
     }
     setError(null);
   }, [equipmentItem, editItem, isOpen]);
@@ -149,7 +144,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
         purchaseSeller: purchaseSeller.trim() || undefined,
         notes: notes.trim() || undefined,
         buildId: buildId.trim() || undefined,
-        imageUrl: imageUrl.trim() || undefined,
         sourceEquipmentId: equipmentItem?.id,
       };
 

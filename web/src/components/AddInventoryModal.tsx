@@ -24,7 +24,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
   const [purchaseSeller, setPurchaseSeller] = useState('');
   const [notes, setNotes] = useState('');
   const [buildId, setBuildId] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
 
   // Pre-fill from equipment item or edit item
   useEffect(() => {
@@ -34,7 +33,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
       setManufacturer(equipmentItem.manufacturer || '');
       setPurchasePrice(equipmentItem.price.toFixed(2));
       setPurchaseSeller(equipmentItem.seller);
-      setImageUrl(equipmentItem.imageUrl || '');
       setQuantity(1);
       setCondition('new');
       setNotes('');
@@ -49,7 +47,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
       setPurchaseSeller(editItem.purchaseSeller || '');
       setNotes(editItem.notes || '');
       setBuildId(editItem.buildId || '');
-      setImageUrl(editItem.imageUrl || '');
     } else {
       // Reset form
       setName('');
@@ -61,7 +58,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
       setPurchaseSeller('');
       setNotes('');
       setBuildId('');
-      setImageUrl('');
     }
     setError(null);
   }, [equipmentItem, editItem, isOpen]);
@@ -82,7 +78,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
         purchaseSeller: purchaseSeller.trim() || undefined,
         notes: notes.trim() || undefined,
         buildId: buildId.trim() || undefined,
-        imageUrl: imageUrl.trim() || undefined,
         sourceEquipmentId: equipmentItem?.id,
       };
 
