@@ -5,7 +5,7 @@ import { LoginPage } from './components/LoginPage';
 import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
 import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setReceiverSettings } from './aircraftApi';
-import { useFilters, useDebounce } from './hooks';
+import { useFilters } from './hooks';
 import { useAuth } from './hooks/useAuth';
 import { useGoogleAnalytics, trackEvent } from './hooks/useGoogleAnalytics';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
@@ -121,7 +121,12 @@ function App() {
 
   // Filters
   const { filters, updateFilter } = useFilters();
-  const debouncedQuery = useDebounce(filters.query, 300);
+  const [appliedQuery, setAppliedQuery] = useState('');
+
+  // Handle explicit search trigger for news feed
+  const handleNewsSearch = useCallback(() => {
+    setAppliedQuery(filters.query);
+  }, [filters.query]);
 
   // Handle auth state changes for routing
   useEffect(() => {
@@ -191,8 +196,8 @@ function App() {
           params.sourceType = filters.sourceType;
         }
 
-        if (debouncedQuery) {
-          params.query = debouncedQuery;
+        if (appliedQuery) {
+          params.query = appliedQuery;
         }
 
         if (filters.fromDate) {
@@ -222,7 +227,7 @@ function App() {
     filters.sort,
     filters.fromDate,
     filters.toDate,
-    debouncedQuery,
+    appliedQuery,
   ]);
 
   // Load more items (infinite scroll)
@@ -246,8 +251,8 @@ function App() {
         params.sourceType = filters.sourceType;
       }
 
-      if (debouncedQuery) {
-        params.query = debouncedQuery;
+      if (appliedQuery) {
+        params.query = appliedQuery;
       }
 
       if (filters.fromDate) {
@@ -268,7 +273,7 @@ function App() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [currentOffset, isLoadingMore, items.length, totalCount, filters, debouncedQuery]);
+  }, [currentOffset, isLoadingMore, items.length, totalCount, filters, appliedQuery]);
 
   // Load inventory when section becomes active or filters change (also for dashboard)
   useEffect(() => {
@@ -386,8 +391,8 @@ function App() {
         params.sourceType = filters.sourceType;
       }
 
-      if (debouncedQuery) {
-        params.query = debouncedQuery;
+      if (appliedQuery) {
+        params.query = appliedQuery;
       }
 
       if (filters.fromDate) {
@@ -412,7 +417,7 @@ function App() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [filters.sources, filters.sourceType, filters.sort, filters.fromDate, filters.toDate, debouncedQuery, startCooldown]);
+  }, [filters.sources, filters.sourceType, filters.sort, filters.fromDate, filters.toDate, appliedQuery, startCooldown]);
 
   // Equipment search handler
   const handleEquipmentSearchChange = useCallback((params: Partial<EquipmentSearchParams>) => {
@@ -720,6 +725,7 @@ function App() {
               <TopBar
                 query={filters.query}
                 onQueryChange={q => updateFilter('query', q)}
+                onSearch={handleNewsSearch}
                 fromDate={filters.fromDate}
                 toDate={filters.toDate}
                 onFromDateChange={d => updateFilter('fromDate', d)}
