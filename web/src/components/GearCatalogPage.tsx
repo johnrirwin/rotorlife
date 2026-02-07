@@ -67,12 +67,12 @@ function GearCard({
     <div 
       role="button"
       tabIndex={0}
-      className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+      className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 overflow-hidden"
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
       aria-label={`View details for ${getCatalogItemDisplayName(item)}`}
     >
-      <div className="flex gap-4">
+      <div className="flex gap-4 min-w-0">
         {/* Image */}
         {item.imageUrl ? (
           <img
@@ -89,13 +89,13 @@ function GearCard({
         )}
 
         {/* Content */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0 flex-1">
               <h3 className="text-white font-medium truncate">
                 {getCatalogItemDisplayName(item)}
               </h3>
-              <p className="text-sm text-slate-400">{item.brand}</p>
+              <p className="text-sm text-slate-400 truncate">{item.brand}</p>
             </div>
             <span className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-full flex-shrink-0">
               {typeLabel}
@@ -273,7 +273,7 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
   const showingPopular = !hasSearched;
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
         <div className="px-6 py-4">
