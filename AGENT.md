@@ -250,7 +250,7 @@ docker-compose up --build -d   # Must build successfully
 
 ## Conventions
 
-- **Commits**: Conventional Commits format (`feat:`, `fix:`, `chore:`, etc.)
+- **Commits**: Required format `type(scope): short summary` using types `feat|fix|chore|docs|refactor|test|build|ci|perf`; scope is required and summary must be imperative without a trailing period
 - **Go**: Standard Go project layout, internal packages
 - **React**: Functional components with hooks, TypeScript strict mode
 - **API**: JSON responses, proper HTTP status codes

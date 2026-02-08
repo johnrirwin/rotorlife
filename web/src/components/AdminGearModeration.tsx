@@ -5,11 +5,11 @@ import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGear
 import { CatalogSearchModal } from './CatalogSearchModal';
 
 interface AdminGearModerationProps {
-  isAdmin: boolean;
+  hasGearAdminAccess: boolean;
   authLoading?: boolean;
 }
 
-export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModerationProps) {
+export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGearModerationProps) {
   const [items, setItems] = useState<GearCatalogItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +39,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   const [isDeletingItem, setIsDeletingItem] = useState(false);
 
   const loadItems = useCallback(async (reset = false, forceRefresh = false) => {
-    if (!isAdmin) return;
+    if (!hasGearAdminAccess) return;
     
     // Prevent concurrent loads by default; allow forced resets to supersede in-flight loads.
     if (isLoadingRef.current && !(reset && forceRefresh)) return;
@@ -90,14 +90,14 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
         isLoadingRef.current = false;
       }
     }
-  }, [isAdmin, appliedQuery, gearType, imageStatus]);
+  }, [hasGearAdminAccess, appliedQuery, gearType, imageStatus]);
 
   // Initial load and auto-search when filters change
   useEffect(() => {
-    if (isAdmin) {
+    if (hasGearAdminAccess) {
       loadItems(true);
     }
-  }, [isAdmin, loadItems]);
+  }, [hasGearAdminAccess, loadItems]);
 
   // Handle search button click
   const handleSearch = useCallback(() => {
@@ -213,11 +213,11 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
     );
   }
 
-  if (!isAdmin) {
+  if (!hasGearAdminAccess) {
     return (
       <div className="p-8 text-center">
         <h1 className="text-2xl font-bold text-red-400 mb-4">Access Denied</h1>
-        <p className="text-slate-400">You must be an admin to access this page.</p>
+        <p className="text-slate-400">You must be an admin or gear admin to access this page.</p>
       </div>
     );
   }

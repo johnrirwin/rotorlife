@@ -7,9 +7,10 @@ export interface User {
   email: string;
   displayName: string;
   avatarUrl?: string;
-  status: 'active' | 'suspended' | 'deleted';
+  status: 'active' | 'disabled' | 'pending';
   emailVerified: boolean;
-  isAdmin: boolean; // Admin users can moderate gear catalog
+  isAdmin: boolean; // Full admin access (gear moderation + user admin)
+  isGearAdmin: boolean; // Gear moderation access
   createdAt: string;
   lastLoginAt?: string;
   // Profile fields

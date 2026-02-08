@@ -21,6 +21,28 @@ func TestAuthProvider_Values(t *testing.T) {
 	}
 }
 
+func TestIsValidUserStatus(t *testing.T) {
+	tests := []struct {
+		name   string
+		status UserStatus
+		want   bool
+	}{
+		{name: "active", status: UserStatusActive, want: true},
+		{name: "disabled", status: UserStatusDisabled, want: true},
+		{name: "pending", status: UserStatusPending, want: true},
+		{name: "invalid", status: UserStatus("suspended"), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsValidUserStatus(tt.status)
+			if got != tt.want {
+				t.Fatalf("IsValidUserStatus(%q) = %v, want %v", tt.status, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUser_Creation(t *testing.T) {
 	// Verify a user can be created with basic fields
 	user := User{

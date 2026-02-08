@@ -112,6 +112,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalogMSRP,           // Adds msrp column for price
 		migrationGearCatalogCuration,       // Adds image curation fields
 		migrationUserIsAdmin,               // Adds is_admin flag to users
+		migrationUserIsGearAdmin,           // Adds is_gear_admin flag to users
 		migrationGearCatalogImageData,      // Adds image_data binary storage for gear images
 		migrationInventoryCatalogUnique,    // Adds unique constraint on (user_id, catalog_id)
 		migrationDropInventoryPurchaseDate, // Drops unused purchase_date column
@@ -652,6 +653,15 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
 
 -- Index for finding admin users
 CREATE INDEX IF NOT EXISTS idx_users_is_admin ON users(is_admin) WHERE is_admin = TRUE;
+`
+
+// Migration to add is_gear_admin flag to users
+const migrationUserIsGearAdmin = `
+-- Add is_gear_admin flag (defaults to false)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_gear_admin BOOLEAN DEFAULT FALSE;
+
+-- Index for finding gear admin users
+CREATE INDEX IF NOT EXISTS idx_users_is_gear_admin ON users(is_gear_admin) WHERE is_gear_admin = TRUE;
 `
 
 // Migration to add binary image storage to gear_catalog
