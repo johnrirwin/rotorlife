@@ -52,6 +52,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
   const [logFormState, setLogFormState] = useState<BatteryLogFormState>(createInitialLogFormState(4));
 
   // Filter state
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterChemistry, setFilterChemistry] = useState<BatteryChemistry | ''>('');
   const [filterCells, setFilterCells] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'name' | 'created_at' | 'capacity_mah' | 'cells'>('created_at');
@@ -62,6 +63,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
     setIsLoading(true);
     try {
       const response = await getBatteries({
+        query: searchQuery.trim() || undefined,
         chemistry: filterChemistry || undefined,
         cells: filterCells || undefined,
         sort_by: sortBy,
@@ -74,7 +76,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [filterChemistry, filterCells, sortBy, sortOrder, onError]);
+  }, [searchQuery, filterChemistry, filterCells, sortBy, sortOrder, onError]);
 
   useEffect(() => {
     loadBatteries();
@@ -301,6 +303,16 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
         {/* Filters */}
         <div className="mt-4 flex flex-wrap gap-4 p-4 bg-slate-800 rounded-lg border border-slate-700">
+          <div className="w-full sm:max-w-xs">
+            <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Search</label>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Name or battery code..."
+              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+            />
+          </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Chemistry</label>
             <select
@@ -360,7 +372,9 @@ export function BatterySection({ onError }: BatterySectionProps) {
           <div className="text-center py-8 text-slate-400">Loading batteries...</div>
         ) : batteries.length === 0 ? (
           <div className="text-center py-8 text-slate-400">
-            No batteries found. Add your first battery to get started!
+            {searchQuery || filterChemistry || filterCells
+              ? 'No batteries match the current filters.'
+              : 'No batteries found. Add your first battery to get started!'}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -928,15 +942,15 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Main render
   return (
-    <div className="flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0">
       {viewMode === 'list' && renderList()}
       {(viewMode === 'create' || viewMode === 'edit') && (
-        <div className="h-full overflow-y-auto p-6 pb-24">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 pb-24">
           {renderForm()}
         </div>
       )}
       {viewMode === 'detail' && (
-        <div className="h-full overflow-y-auto p-6 pb-24">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 pb-24">
           {renderDetail()}
         </div>
       )}
