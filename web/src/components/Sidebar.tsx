@@ -100,7 +100,7 @@ export const Sidebar = memo(function Sidebar({
         `}
       >
         {/* Mobile close button */}
-        <div className="md:hidden flex justify-end p-2">
+        <div className="md:hidden flex justify-end px-2 pt-1 pb-0">
           <button
             onClick={onMobileMenuClose}
             className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
@@ -112,7 +112,7 @@ export const Sidebar = memo(function Sidebar({
         </div>
 
         {/* Section Switcher */}
-        <div className="p-4 border-b border-slate-800">
+        <div className="px-4 pt-1 pb-4 md:p-4 border-b border-slate-800">
         <nav className="flex flex-col gap-1">
           {/* Home - only shown when NOT authenticated */}
           {!isAuthenticated && (
