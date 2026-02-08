@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -41,13 +42,25 @@ func (api *AdminAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http
 		return
 	}
 
-	// All admin routes require authentication AND admin role
-	mux.HandleFunc("/api/admin/gear", corsMiddleware(api.authMiddleware.RequireAuth(api.requireAdmin(api.handleAdminGear))))
-	mux.HandleFunc("/api/admin/gear/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireAdmin(api.handleAdminGearByID))))
+	// Gear moderation routes: admin OR gear-admin role
+	mux.HandleFunc("/api/admin/gear", corsMiddleware(api.authMiddleware.RequireAuth(api.requireGearModerator(api.handleAdminGear))))
+	mux.HandleFunc("/api/admin/gear/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireGearModerator(api.handleAdminGearByID))))
+
+	// User admin routes: admin role only
+	mux.HandleFunc("/api/admin/users", corsMiddleware(api.authMiddleware.RequireAuth(api.requireAdmin(api.handleAdminUsers))))
+	mux.HandleFunc("/api/admin/users/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireAdmin(api.handleAdminUserByID))))
 }
 
-// requireAdmin is middleware that checks if the authenticated user is an admin
-func (api *AdminAPI) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+func canModerateGear(user *models.User) bool {
+	return user != nil && (user.IsAdmin || user.IsGearAdmin)
+}
+
+func canManageUsers(user *models.User) bool {
+	return user != nil && user.IsAdmin
+}
+
+// requireRole is middleware that checks role-based access for admin endpoints.
+func (api *AdminAPI) requireRole(next http.HandlerFunc, allowed func(*models.User) bool, deniedMessage string, deniedLogMessage string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := auth.GetUserID(r.Context())
 		if userID == "" {
@@ -59,20 +72,35 @@ func (api *AdminAPI) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 		defer cancel()
 
 		user, err := api.userStore.GetByID(ctx, userID)
-		if err != nil || user == nil {
-			api.logger.Error("Failed to get user for admin check", logging.WithField("error", err))
+		if err != nil {
+			api.logger.Error("Failed to get user for admin check", logging.WithField("error", err.Error()))
+			http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
+			return
+		}
+		if user == nil {
+			api.logger.Warn("Authenticated user missing during admin check", logging.WithField("userId", userID))
 			http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
 			return
 		}
 
-		if !user.IsAdmin {
-			api.logger.Warn("Non-admin user attempted admin access", logging.WithField("userId", userID))
-			http.Error(w, `{"error":"admin access required"}`, http.StatusForbidden)
+		if !allowed(user) {
+			api.logger.Warn(deniedLogMessage, logging.WithField("userId", userID))
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, deniedMessage), http.StatusForbidden)
 			return
 		}
 
 		next(w, r)
 	}
+}
+
+// requireAdmin is middleware that checks if the authenticated user is a full admin.
+func (api *AdminAPI) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return api.requireRole(next, canManageUsers, "admin access required", "Non-admin user attempted user-admin access")
+}
+
+// requireGearModerator is middleware that allows full admins and gear-admin users.
+func (api *AdminAPI) requireGearModerator(next http.HandlerFunc) http.HandlerFunc {
+	return api.requireRole(next, canModerateGear, "admin or gear-admin access required", "User without gear moderation role attempted admin gear access")
 }
 
 // handleAdminGear handles GET /api/admin/gear (list gear for moderation)
@@ -248,6 +276,268 @@ func (api *AdminAPI) handleDeleteGear(w http.ResponseWriter, r *http.Request, id
 	api.writeJSON(w, http.StatusOK, map[string]string{
 		"message": "Gear item deleted successfully",
 	})
+}
+
+// handleAdminUsers handles GET /api/admin/users for searching users.
+func (api *AdminAPI) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	query := r.URL.Query()
+	status := models.UserStatus(strings.TrimSpace(query.Get("status")))
+	if status != "" && !models.IsValidUserStatus(status) {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid status filter"})
+		return
+	}
+
+	limit := parseIntQuery(query.Get("limit"), 20)
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	offset := parseIntQuery(query.Get("offset"), 0)
+	if offset < 0 {
+		offset = 0
+	}
+
+	params := models.UserFilterParams{
+		Query:  strings.TrimSpace(query.Get("query")),
+		Status: status,
+		Limit:  limit,
+		Offset: offset,
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	response, err := api.userStore.List(ctx, params)
+	if err != nil {
+		api.logger.Error("Failed to list users for admin", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to list users",
+		})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, response)
+}
+
+// handleAdminUserByID handles GET/PATCH/DELETE /api/admin/users/{id}
+func (api *AdminAPI) handleAdminUserByID(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/admin/users/")
+
+	if strings.HasSuffix(path, "/avatar") {
+		id := strings.TrimSuffix(path, "/avatar")
+		id = strings.TrimSuffix(id, "/")
+		if id == "" {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user ID required"})
+			return
+		}
+
+		if r.Method != http.MethodDelete {
+			api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+
+		api.handleDeleteAdminUserAvatar(w, r, id)
+		return
+	}
+
+	id := strings.TrimSuffix(path, "/")
+	if id == "" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user ID required"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		api.handleGetAdminUser(w, r, id)
+	case http.MethodPatch, http.MethodPut:
+		api.handleUpdateAdminUser(w, r, id)
+	case http.MethodDelete:
+		api.handleDeleteAdminUser(w, r, id)
+	default:
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+// handleGetAdminUser handles GET /api/admin/users/{id}
+func (api *AdminAPI) handleGetAdminUser(w http.ResponseWriter, r *http.Request, id string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	user, err := api.userStore.GetByID(ctx, id)
+	if err != nil {
+		api.logger.Error("Failed to get user for admin", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to get user",
+		})
+		return
+	}
+	if user == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "user not found",
+		})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, user)
+}
+
+// handleUpdateAdminUser handles PATCH /api/admin/users/{id}
+func (api *AdminAPI) handleUpdateAdminUser(w http.ResponseWriter, r *http.Request, id string) {
+	adminUserID := auth.GetUserID(r.Context())
+
+	var params models.AdminUpdateUserParams
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+
+	if params.Status == nil && params.IsAdmin == nil && params.IsGearAdmin == nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "at least one updatable field is required"})
+		return
+	}
+
+	if params.Status != nil && !models.IsValidUserStatus(*params.Status) {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user status"})
+		return
+	}
+
+	if id == adminUserID {
+		if params.IsAdmin != nil && !*params.IsAdmin {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot remove your own admin role"})
+			return
+		}
+		if params.Status != nil && *params.Status != models.UserStatusActive {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot disable your own account from user admin"})
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	existing, err := api.userStore.GetByID(ctx, id)
+	if err != nil {
+		api.logger.Error("Failed to get user for admin update", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to get user",
+		})
+		return
+	}
+	if existing == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "user not found",
+		})
+		return
+	}
+
+	updated, err := api.userStore.AdminUpdate(ctx, id, params)
+	if err != nil {
+		api.logger.Error("Failed to update user from admin", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to update user",
+		})
+		return
+	}
+
+	api.logger.Info("Admin updated user access",
+		logging.WithField("targetUserId", id),
+		logging.WithField("adminId", adminUserID),
+	)
+
+	api.writeJSON(w, http.StatusOK, updated)
+}
+
+// handleDeleteAdminUser handles DELETE /api/admin/users/{id}
+func (api *AdminAPI) handleDeleteAdminUser(w http.ResponseWriter, r *http.Request, id string) {
+	adminUserID := auth.GetUserID(r.Context())
+	if id == adminUserID {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "use profile settings to delete your own account",
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	existing, err := api.userStore.GetByID(ctx, id)
+	if err != nil {
+		api.logger.Error("Failed to get user for admin delete", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to get user",
+		})
+		return
+	}
+	if existing == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "user not found",
+		})
+		return
+	}
+
+	if err := api.userStore.HardDelete(ctx, id); err != nil {
+		api.logger.Error("Failed to delete user from admin", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to delete user",
+		})
+		return
+	}
+
+	api.logger.Info("Admin deleted user account",
+		logging.WithField("targetUserId", id),
+		logging.WithField("adminId", adminUserID),
+	)
+
+	api.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "User deleted successfully",
+	})
+}
+
+// handleDeleteAdminUserAvatar handles DELETE /api/admin/users/{id}/avatar
+func (api *AdminAPI) handleDeleteAdminUserAvatar(w http.ResponseWriter, r *http.Request, id string) {
+	adminUserID := auth.GetUserID(r.Context())
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	existing, err := api.userStore.GetByID(ctx, id)
+	if err != nil {
+		api.logger.Error("Failed to get user for avatar delete", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to get user",
+		})
+		return
+	}
+	if existing == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "user not found",
+		})
+		return
+	}
+
+	updated, err := api.userStore.AdminClearAvatar(ctx, id)
+	if err != nil {
+		api.logger.Error("Failed to remove user avatar from admin", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to remove profile picture",
+		})
+		return
+	}
+
+	api.logger.Info("Admin removed user avatar",
+		logging.WithField("targetUserId", id),
+		logging.WithField("adminId", adminUserID),
+	)
+
+	api.writeJSON(w, http.StatusOK, updated)
 }
 
 // writeJSON writes a JSON response

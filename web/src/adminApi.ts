@@ -1,4 +1,4 @@
-// Admin API for gear moderation
+// Admin API for gear moderation and user administration
 
 import type {
   GearCatalogItem,
@@ -6,6 +6,12 @@ import type {
   AdminGearSearchParams,
   AdminUpdateGearCatalogParams,
 } from './gearCatalogTypes';
+import type {
+  AdminUser,
+  AdminUserSearchParams,
+  AdminUsersResponse,
+  AdminUpdateUserParams,
+} from './adminUserTypes';
 import { getStoredTokens } from './authApi';
 
 const API_BASE = '/api/admin';
@@ -44,7 +50,7 @@ export async function adminSearchGear(
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin access required');
+      throw new Error('Admin or gear-admin access required');
     }
     throw new Error(data.error || 'Failed to search gear');
   }
@@ -69,7 +75,7 @@ export async function adminGetGear(id: string): Promise<GearCatalogItem> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin access required');
+      throw new Error('Admin or gear-admin access required');
     }
     if (response.status === 404) {
       throw new Error('Gear item not found');
@@ -102,7 +108,7 @@ export async function adminUpdateGear(
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin access required');
+      throw new Error('Admin or gear-admin access required');
     }
     if (response.status === 404) {
       throw new Error('Gear item not found');
@@ -150,7 +156,7 @@ export async function adminUploadGearImage(
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin access required');
+      throw new Error('Admin or gear-admin access required');
     }
     if (response.status === 400) {
       throw new Error(data.error || 'Invalid image');
@@ -196,7 +202,7 @@ export async function adminDeleteGear(id: string): Promise<void> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin access required');
+      throw new Error('Admin or gear-admin access required');
     }
     if (response.status === 404) {
       throw new Error('Gear item not found');
@@ -217,4 +223,152 @@ export function getGearImageUrl(gearId: string, cacheBuster?: number): string {
 export function getAdminGearImageUrl(gearId: string, cacheBuster?: number): string {
   const url = `/api/admin/gear/${gearId}/image`;
   return cacheBuster ? `${url}?v=${cacheBuster}` : url;
+}
+
+// Admin search for users (admin only)
+export async function adminSearchUsers(
+  params: AdminUserSearchParams
+): Promise<AdminUsersResponse> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const searchParams = new URLSearchParams();
+  if (params.query) searchParams.set('query', params.query);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.limit) searchParams.set('limit', params.limit.toString());
+  if (params.offset) searchParams.set('offset', params.offset.toString());
+
+  const response = await fetch(`${API_BASE}/users?${searchParams.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin access required');
+    }
+    throw new Error(data.error || 'Failed to search users');
+  }
+
+  return response.json();
+}
+
+// Get a single user by ID (admin only)
+export async function adminGetUser(id: string): Promise<AdminUser> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/users/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('User not found');
+    }
+    throw new Error(data.error || 'Failed to get user');
+  }
+
+  return response.json();
+}
+
+// Update a user as admin (status/roles)
+export async function adminUpdateUser(
+  id: string,
+  params: AdminUpdateUserParams
+): Promise<AdminUser> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/users/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('User not found');
+    }
+    throw new Error(data.error || 'Failed to update user');
+  }
+
+  return response.json();
+}
+
+// Delete a user account (admin only)
+export async function adminDeleteUser(id: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/users/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('User not found');
+    }
+    throw new Error(data.error || 'Failed to delete user');
+  }
+}
+
+// Remove a user's profile picture (admin only)
+export async function adminDeleteUserAvatar(id: string): Promise<AdminUser> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/users/${id}/avatar`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('User not found');
+    }
+    throw new Error(data.error || 'Failed to remove profile picture');
+  }
+
+  return response.json();
 }

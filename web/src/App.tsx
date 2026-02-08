@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddGearModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, GearCatalogPage, AdminGearModeration } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddGearModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, GearCatalogPage, AdminGearModeration, AdminUserManagement } from './components';
 import { LoginPage } from './components/LoginPage';
 import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
@@ -31,6 +31,7 @@ const pathToSection: Record<string, AppSection> = {
   '/social': 'social',
   '/profile': 'profile',
   '/admin/gear': 'admin-gear',
+  '/admin/users': 'admin-users',
 };
 
 const sectionToPath: Record<AppSection, string> = {
@@ -48,6 +49,7 @@ const sectionToPath: Record<AppSection, string> = {
   'profile': '/profile',
   'pilot-profile': '/social/pilots', // Dynamic - handled separately
   'admin-gear': '/admin/gear',
+  'admin-users': '/admin/users',
 };
 
 // Pagination constant for news feed infinite scroll
@@ -133,7 +135,7 @@ function App() {
     if (authLoading) return;
     
     // Protected paths that require authentication
-    const protectedPaths = ['/dashboard', '/inventory', '/aircraft', '/radio', '/batteries', '/profile', '/social'];
+    const protectedPaths = ['/dashboard', '/inventory', '/aircraft', '/radio', '/batteries', '/profile', '/social', '/admin'];
     const isProtectedPath = protectedPaths.some(p => location.pathname.startsWith(p));
     
     // On initial load after auth check completes
@@ -600,7 +602,7 @@ function App() {
       return;
     }
     // Protected sections that require authentication
-    const protectedSections = ['dashboard', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social'];
+    const protectedSections = ['dashboard', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social', 'admin-gear', 'admin-users'];
     if (protectedSections.includes(section) && !isAuthenticated) {
       setAuthModal('login');
       return;
@@ -766,7 +768,12 @@ function App() {
 
         {/* Admin: Gear Moderation Section */}
         {activeSection === 'admin-gear' && (
-          <AdminGearModeration isAdmin={user?.isAdmin || false} authLoading={authLoading} />
+          <AdminGearModeration hasGearAdminAccess={Boolean(user?.isAdmin || user?.isGearAdmin)} authLoading={authLoading} />
+        )}
+
+        {/* Admin: User Admin Section */}
+        {activeSection === 'admin-users' && (
+          <AdminUserManagement isAdmin={Boolean(user?.isAdmin)} currentUserId={user?.id} authLoading={authLoading} />
         )}
 
         {/* Shop Section */}

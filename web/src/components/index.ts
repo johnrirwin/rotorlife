@@ -13,6 +13,7 @@ export { CatalogSearchModal } from './CatalogSearchModal';
 export { ShopSection } from './ShopSection';
 export { GearCatalogPage } from './GearCatalogPage';
 export { AdminGearModeration } from './AdminGearModeration';
+export { AdminUserManagement } from './AdminUserManagement';
 
 // Aircraft components
 export { AircraftCard } from './AircraftCard';

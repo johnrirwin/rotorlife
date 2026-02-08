@@ -14,6 +14,7 @@ const mockUser: User = {
   status: 'active',
   emailVerified: true,
   isAdmin: false,
+  isGearAdmin: false,
   createdAt: '2025-01-01T00:00:00Z',
 }
 
@@ -298,25 +299,27 @@ describe('Sidebar', () => {
   })
 
   describe('Admin Navigation', () => {
-    it('hides Gear Moderation for non-admin users', () => {
+    it('hides admin sections for regular users', () => {
       render(<Sidebar {...createDefaultProps({ 
         isAuthenticated: true, 
         user: mockUser // mockUser has isAdmin: false
       })} />)
       
       expect(screen.queryByText('Gear Moderation')).not.toBeInTheDocument()
+      expect(screen.queryByText('User Admin')).not.toBeInTheDocument()
     })
 
-    it('hides Gear Moderation when unauthenticated', () => {
+    it('hides admin sections when unauthenticated', () => {
       render(<Sidebar {...createDefaultProps({ 
         isAuthenticated: false, 
         user: null
       })} />)
       
       expect(screen.queryByText('Gear Moderation')).not.toBeInTheDocument()
+      expect(screen.queryByText('User Admin')).not.toBeInTheDocument()
     })
 
-    it('shows Gear Moderation for admin users', () => {
+    it('shows both admin sections for admin users', () => {
       const adminUser: User = { ...mockUser, isAdmin: true }
       render(<Sidebar {...createDefaultProps({ 
         isAuthenticated: true, 
@@ -324,6 +327,18 @@ describe('Sidebar', () => {
       })} />)
       
       expect(screen.getByText('Gear Moderation')).toBeInTheDocument()
+      expect(screen.getByText('User Admin')).toBeInTheDocument()
+    })
+
+    it('shows only Gear Moderation for gear-admin users', () => {
+      const gearAdminUser: User = { ...mockUser, isGearAdmin: true }
+      render(<Sidebar {...createDefaultProps({
+        isAuthenticated: true,
+        user: gearAdminUser,
+      })} />)
+
+      expect(screen.getByText('Gear Moderation')).toBeInTheDocument()
+      expect(screen.queryByText('User Admin')).not.toBeInTheDocument()
     })
 
     it('navigates to admin-gear section when Gear Moderation is clicked', () => {
@@ -337,6 +352,19 @@ describe('Sidebar', () => {
       
       fireEvent.click(screen.getByText('Gear Moderation'))
       expect(onSectionChange).toHaveBeenCalledWith('admin-gear')
+    })
+
+    it('navigates to admin-users section when User Admin is clicked', () => {
+      const adminUser: User = { ...mockUser, isAdmin: true }
+      const onSectionChange = vi.fn()
+      render(<Sidebar {...createDefaultProps({
+        isAuthenticated: true,
+        user: adminUser,
+        onSectionChange,
+      })} />)
+
+      fireEvent.click(screen.getByText('User Admin'))
+      expect(onSectionChange).toHaveBeenCalledWith('admin-users')
     })
   })
 })

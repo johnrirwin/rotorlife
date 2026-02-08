@@ -61,7 +61,8 @@ type User struct {
 	DisplayName string     `json:"displayName"`
 	AvatarURL   string     `json:"avatarUrl,omitempty"` // Legacy field, kept for compatibility
 	Status      UserStatus `json:"status"`
-	IsAdmin     bool       `json:"isAdmin"` // Admin users can moderate gear catalog
+	IsAdmin     bool       `json:"isAdmin"`     // Full admin access (gear moderation + user admin)
+	IsGearAdmin bool       `json:"isGearAdmin"` // Gear moderation access only (unless also admin)
 	CreatedAt   time.Time  `json:"createdAt"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	LastLoginAt *time.Time `json:"lastLoginAt,omitempty"`
@@ -165,6 +166,13 @@ type UpdateUserParams struct {
 	GoogleAvatarURL *string     `json:"googleAvatarUrl,omitempty"`
 	AvatarType      *AvatarType `json:"avatarType,omitempty"`
 	CustomAvatarURL *string     `json:"customAvatarUrl,omitempty"`
+}
+
+// AdminUpdateUserParams represents admin-only user updates
+type AdminUpdateUserParams struct {
+	Status      *UserStatus `json:"status,omitempty"`
+	IsAdmin     *bool       `json:"isAdmin,omitempty"`
+	IsGearAdmin *bool       `json:"isGearAdmin,omitempty"`
 }
 
 // UpdateProfileParams represents parameters for updating user profile
@@ -335,6 +343,16 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string {
 	return e.Message
+}
+
+// IsValidUserStatus checks if a user status is one of the supported values.
+func IsValidUserStatus(status UserStatus) bool {
+	switch status {
+	case UserStatusActive, UserStatusDisabled, UserStatusPending:
+		return true
+	default:
+		return false
+	}
 }
 
 // UserFilterParams represents parameters for filtering users
