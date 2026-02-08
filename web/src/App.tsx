@@ -904,21 +904,49 @@ function App() {
         )}
 
         {/* Social/Pilot Directory Section */}
-        {activeSection === 'social' && !selectedPilotId && (
+        {activeSection === 'social' && (
           <SocialPage
             onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
           />
         )}
-
-        {/* Pilot Profile View */}
-        {activeSection === 'social' && selectedPilotId && (
-          <PilotProfile
-            pilotId={selectedPilotId}
-            onBack={() => setSelectedPilotId(null)}
-            onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
-          />
-        )}
       </div>
+
+      {/* Pilot Profile Modal (Social) */}
+      {activeSection === 'social' && selectedPilotId && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pilot-profile-modal-title"
+          className="fixed inset-0 z-[70] flex items-start md:items-center justify-center p-4 md:p-6"
+        >
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setSelectedPilotId(null)}
+          />
+          <div className="relative w-full max-w-4xl h-[92vh] max-h-[92vh] overflow-hidden bg-slate-900 border border-slate-700 rounded-2xl flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+              <h2 id="pilot-profile-modal-title" className="text-lg font-semibold text-white">Pilot Profile</h2>
+              <button
+                onClick={() => setSelectedPilotId(null)}
+                aria-label="Close pilot profile modal"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <PilotProfile
+                pilotId={selectedPilotId}
+                onBack={() => setSelectedPilotId(null)}
+                onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
+                isModal
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Item Detail Modal (News) */}
       {selectedItem && (
