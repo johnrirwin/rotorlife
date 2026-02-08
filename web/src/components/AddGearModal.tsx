@@ -29,6 +29,9 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const deleteTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const deleteCancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const wasDeleteConfirmOpenRef = useRef(false);
   
   // Track whether auto-add has been triggered to prevent duplicate submissions
   const autoAddTriggeredRef = useRef<string | null>(null);
@@ -127,18 +130,40 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
     setShowDeleteConfirmModal(false);
   }, [equipmentItem, editItem, isOpen]);
 
+  useEffect(() => {
+    if (showDeleteConfirmModal) {
+      deleteCancelButtonRef.current?.focus();
+    } else if (wasDeleteConfirmOpenRef.current) {
+      deleteTriggerButtonRef.current?.focus();
+    }
+
+    wasDeleteConfirmOpenRef.current = showDeleteConfirmModal;
+  }, [showDeleteConfirmModal]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
     try {
+      const trimmedPurchasePrice = purchasePrice.trim();
+      let parsedPurchasePrice: number | undefined;
+      if (trimmedPurchasePrice) {
+        const parsed = Number(trimmedPurchasePrice);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          setError('Enter a valid purchase price');
+          setIsSubmitting(false);
+          return;
+        }
+        parsedPurchasePrice = parsed;
+      }
+
       const params: AddInventoryParams = {
         name: name.trim(),
         category,
         manufacturer: manufacturer.trim() || undefined,
         quantity,
-        purchasePrice: purchasePrice ? parseFloat(purchasePrice) : undefined,
+        purchasePrice: parsedPurchasePrice,
         purchaseSeller: purchaseSeller.trim() || undefined,
         notes: notes.trim() || undefined,
         buildId: buildId.trim() || undefined,
@@ -157,17 +182,17 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
     }
   };
 
-  const handleOpenDeleteConfirm = () => {
+  const handleOpenDeleteConfirm = useCallback(() => {
     if (!editItem || !onDelete || isSubmitting || isDeleting) return;
     setShowDeleteConfirmModal(true);
-  };
+  }, [editItem, isDeleting, isSubmitting, onDelete]);
 
-  const handleCancelDelete = () => {
+  const handleCancelDelete = useCallback(() => {
     if (isDeleting) return;
     setShowDeleteConfirmModal(false);
-  };
+  }, [isDeleting]);
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = useCallback(async () => {
     if (!editItem || !onDelete) return;
 
     setIsDeleting(true);
@@ -181,7 +206,21 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
     } finally {
       setIsDeleting(false);
     }
-  };
+  }, [editItem, onDelete, onClose]);
+
+  useEffect(() => {
+    if (!showDeleteConfirmModal) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleCancelDelete();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleCancelDelete, showDeleteConfirmModal]);
 
   if (!isOpen) return null;
 
@@ -391,6 +430,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
             <div>
               {editItem && onDelete && (
                 <button
+                  ref={deleteTriggerButtonRef}
                   type="button"
                   onClick={handleOpenDeleteConfirm}
                   disabled={isSubmitting || isDeleting}
@@ -423,20 +463,27 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
             className="absolute inset-0 bg-black/70"
             onClick={handleCancelDelete}
           />
-          <div className="relative bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="inventory-delete-dialog-title"
+            aria-describedby="inventory-delete-dialog-description"
+            className="relative bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50"
+          >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
                 <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-white">Delete Item?</h3>
+              <h3 id="inventory-delete-dialog-title" className="text-lg font-semibold text-white">Delete Item?</h3>
             </div>
-            <p className="text-slate-300 mb-5">
+            <p id="inventory-delete-dialog-description" className="text-slate-300 mb-5">
               Are you sure you want to delete <span className="text-white font-medium">{editItem.name}</span> from your inventory?
             </p>
             <div className="flex gap-3">
               <button
+                ref={deleteCancelButtonRef}
                 type="button"
                 onClick={handleCancelDelete}
                 disabled={isDeleting}

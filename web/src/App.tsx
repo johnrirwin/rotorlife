@@ -437,6 +437,7 @@ function App() {
       setInventorySummary(summaryResponse);
     } catch (err) {
       console.error('Failed to delete inventory item:', err);
+      throw err instanceof Error ? err : new Error('Failed to delete inventory item');
     }
   }, []);
 
