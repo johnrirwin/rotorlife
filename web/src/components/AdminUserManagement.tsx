@@ -432,9 +432,21 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
 
           <div
             className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 md:px-6 pb-6"
-            onScroll={() => {
-              if (document.activeElement instanceof HTMLElement) {
-                document.activeElement.blur();
+            onScroll={(event) => {
+              // Dismiss keyboard only on touch/coarse-pointer devices and only
+              // when a form control inside this scroll region is focused.
+              if (typeof window === 'undefined') return;
+              if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+
+              const activeElement = document.activeElement;
+              if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+              const scrollContainer = event.currentTarget;
+              if (!scrollContainer.contains(activeElement)) return;
+
+              const tagName = activeElement.tagName;
+              if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+                activeElement.blur();
               }
             }}
           >
