@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   Battery,
@@ -35,6 +35,8 @@ interface BatterySectionProps {
 
 type ViewMode = 'list' | 'create' | 'detail' | 'edit';
 
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function BatterySection({ onError }: BatterySectionProps) {
   // State
   const [batteries, setBatteries] = useState<Battery[]>([]);
@@ -53,6 +55,10 @@ export function BatterySection({ onError }: BatterySectionProps) {
   const [logFormState, setLogFormState] = useState<BatteryLogFormState>(createInitialLogFormState(4));
   const [batteryPendingDelete, setBatteryPendingDelete] = useState<Battery | null>(null);
   const [isDeletingBattery, setIsDeletingBattery] = useState(false);
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
+  const formDialogRef = useRef<HTMLDivElement | null>(null);
+  const detailDialogRef = useRef<HTMLDivElement | null>(null);
+  const lastFocusedElementBeforeModalRef = useRef<HTMLElement | null>(null);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -108,6 +114,71 @@ export function BatterySection({ onError }: BatterySectionProps) {
       loadLogs();
     }
   }, [viewMode, selectedBattery, loadLogs]);
+
+  useEffect(() => {
+    const listContainer = listContainerRef.current;
+    if (!listContainer) return;
+
+    if (viewMode !== 'list') {
+      listContainer.setAttribute('aria-hidden', 'true');
+      listContainer.setAttribute('inert', '');
+    } else {
+      listContainer.removeAttribute('aria-hidden');
+      listContainer.removeAttribute('inert');
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    const activeDialog =
+      viewMode === 'create' || viewMode === 'edit'
+        ? formDialogRef.current
+        : viewMode === 'detail'
+          ? detailDialogRef.current
+          : null;
+
+    if (!activeDialog) return;
+
+    lastFocusedElementBeforeModalRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+    const focusableElements = activeDialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+    const firstElement = focusableElements[0] ?? activeDialog;
+    firstElement.focus();
+
+    const handleTabKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+
+      const elements = activeDialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (elements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey) {
+        if (activeElement === first || !activeDialog.contains(activeElement)) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+
+      if (activeElement === last || !activeDialog.contains(activeElement)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleTabKey);
+    return () => {
+      document.removeEventListener('keydown', handleTabKey);
+      lastFocusedElementBeforeModalRef.current?.focus();
+    };
+  }, [viewMode]);
 
   // Form validation
   const validateForm = (): boolean => {
@@ -296,7 +367,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Render list view
   const renderList = () => (
-    <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
+    <div ref={listContainerRef} className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
       <div className="sticky top-0 z-20 px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-slate-900/85">
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1036,7 +1107,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={closeFormModal}
           />
-          <div className="relative w-full max-w-3xl">
+          <div ref={formDialogRef} tabIndex={-1} className="relative w-full max-w-3xl">
             {renderForm()}
           </div>
         </div>,
@@ -1053,7 +1124,11 @@ export function BatterySection({ onError }: BatterySectionProps) {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={closeDetailModal}
           />
-          <div className="relative w-full max-w-6xl h-[92vh] max-h-[92vh] overflow-hidden bg-slate-900 border border-slate-700 rounded-2xl flex flex-col">
+          <div
+            ref={detailDialogRef}
+            tabIndex={-1}
+            className="relative w-full max-w-6xl h-[92vh] max-h-[92vh] overflow-hidden bg-slate-900 border border-slate-700 rounded-2xl flex flex-col"
+          >
             {renderDetail()}
           </div>
         </div>,
