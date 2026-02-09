@@ -230,8 +230,8 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
       <h1 className="text-lg md:text-2xl font-bold text-white mb-3">Gear Moderation</h1>
 
       <div className="flex flex-col gap-3">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1 min-w-0">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
               fill="none"
@@ -256,25 +256,25 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           </div>
           <button
             onClick={handleSearch}
-            className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+            className="w-full sm:w-auto shrink-0 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
           >
             Search
           </button>
           {appliedQuery && (
             <button
               onClick={handleClearSearch}
-              className="px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+              className="w-full sm:w-auto shrink-0 px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
             >
               Clear
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <select
             value={gearType}
             onChange={(e) => setGearType(e.target.value as GearType | '')}
-            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full min-w-0 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">All Types</option>
             {GEAR_TYPES.map((type) => (
@@ -287,7 +287,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           <select
             value={imageStatus}
             onChange={(e) => setImageStatus(e.target.value as ImageStatusFilter | '')}
-            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full min-w-0 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">Needs Work</option>
             <option value="all">All Records</option>
@@ -297,13 +297,13 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           </select>
         </div>
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-slate-400 text-sm">
             {totalCount} item{totalCount !== 1 ? 's' : ''} found
           </p>
           <button
             onClick={handleAddGearClick}
-            className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+            className="w-full sm:w-auto px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

@@ -45,12 +45,10 @@ export function MobileFloatingControls({
       closeControls();
     };
 
-    window.addEventListener('scroll', closeControls, { passive: true });
     window.addEventListener('touchmove', handlePointerScroll, { passive: true });
     window.addEventListener('wheel', handlePointerScroll, { passive: true });
 
     return () => {
-      window.removeEventListener('scroll', closeControls);
       window.removeEventListener('touchmove', handlePointerScroll);
       window.removeEventListener('wheel', handlePointerScroll);
     };
@@ -84,7 +82,7 @@ export function MobileFloatingControls({
             ref={panelRef}
             role="region"
             aria-label={label}
-            className={`mt-2 rounded-xl border border-slate-700 overflow-hidden shadow-2xl shadow-slate-950/40 bg-slate-900/95 backdrop-blur max-h-[70vh] overflow-y-auto ${panelClassName ?? ''}`}
+            className={`mt-2 rounded-xl border border-slate-700 overflow-hidden shadow-2xl shadow-slate-950/40 bg-slate-900/95 backdrop-blur max-h-[70vh] overflow-x-hidden overflow-y-auto ${panelClassName ?? ''}`}
           >
             {children}
           </div>
