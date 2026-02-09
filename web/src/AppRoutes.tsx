@@ -129,7 +129,14 @@ export function AppRoutes({
           />
         }
       />
-      <Route path="/dashboard" element={dashboardElement} />
+      <Route
+        path="/dashboard"
+        element={
+          isAuthenticated
+            ? dashboardElement
+            : <Navigate to="/" replace />
+        }
+      />
       <Route
         path="/news"
         element={

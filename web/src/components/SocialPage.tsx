@@ -672,10 +672,23 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
 
       <div
         className="flex-1 overflow-y-auto"
-        onScroll={() => {
+        onScroll={(event) => {
           setIsMobileControlsOpen((prev) => (prev ? false : prev));
-          if (document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur();
+
+          // Dismiss keyboard only on touch/coarse-pointer devices and only
+          // when a form control inside this scroll region is focused.
+          if (typeof window === 'undefined') return;
+          if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+
+          const activeElement = document.activeElement;
+          if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+          const scrollContainer = event.currentTarget;
+          if (!scrollContainer.contains(activeElement)) return;
+
+          const tagName = activeElement.tagName;
+          if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+            activeElement.blur();
           }
         }}
       >

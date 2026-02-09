@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import type { ReactNode } from 'react';
 
 interface MobileFloatingControlsProps {
@@ -18,6 +18,8 @@ export function MobileFloatingControls({
   className,
   panelClassName,
 }: MobileFloatingControlsProps) {
+  const panelId = useId();
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -43,6 +45,7 @@ export function MobileFloatingControls({
           type="button"
           onClick={onToggle}
           aria-expanded={isOpen}
+          aria-controls={panelId}
           className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-slate-700 bg-slate-800/95 backdrop-blur text-white font-medium shadow-lg shadow-slate-950/30"
         >
           <span className="truncate">{label}</span>
@@ -58,7 +61,12 @@ export function MobileFloatingControls({
         </button>
 
         {isOpen && (
-          <div className={`mt-2 rounded-xl border border-slate-700 overflow-hidden shadow-2xl shadow-slate-950/40 bg-slate-900/95 backdrop-blur max-h-[70vh] overflow-y-auto ${panelClassName ?? ''}`}>
+          <div
+            id={panelId}
+            role="region"
+            aria-label={label}
+            className={`mt-2 rounded-xl border border-slate-700 overflow-hidden shadow-2xl shadow-slate-950/40 bg-slate-900/95 backdrop-blur max-h-[70vh] overflow-y-auto ${panelClassName ?? ''}`}
+          >
             {children}
           </div>
         )}
