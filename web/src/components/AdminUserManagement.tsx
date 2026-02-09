@@ -457,10 +457,10 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
           )}
 
           {/* Desktop table */}
-          <div className="hidden md:block border border-slate-800 rounded-xl overflow-hidden">
+          <div className="hidden md:block border border-slate-800 rounded-xl overflow-hidden bg-slate-900/40">
             <table className="w-full table-fixed text-sm">
-              <thead className="bg-slate-900 text-slate-400">
-                <tr>
+              <thead className="sticky top-0 z-10 bg-slate-900 text-slate-400">
+                <tr className="border-b border-slate-800">
                   <th className="w-1/4 text-left px-4 py-3 font-medium">User</th>
                   <th className="w-1/4 text-center px-4 py-3 font-medium">Status</th>
                   <th className="w-1/4 text-center px-4 py-3 font-medium">Roles</th>
