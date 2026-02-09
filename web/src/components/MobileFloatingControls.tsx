@@ -10,6 +10,12 @@ interface MobileFloatingControlsProps {
   panelClassName?: string;
 }
 
+interface PendingScrollRestore {
+  overflowY: string;
+  webkitOverflowScrolling: string;
+  frameId: number;
+}
+
 export function MobileFloatingControls({
   label,
   isOpen,
@@ -23,6 +29,7 @@ export function MobileFloatingControls({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const isClosingRef = useRef(false);
   const didStopScrollOnPressRef = useRef(false);
+  const pendingScrollRestoresRef = useRef(new Map<HTMLElement, PendingScrollRestore>());
 
   const stopSiblingMomentumScroll = () => {
     if (typeof window === 'undefined') return;
@@ -41,17 +48,33 @@ export function MobileFloatingControls({
     scrollContainers.forEach((container) => {
       const scrollTop = container.scrollTop;
       const inlineStyle = container.style as CSSStyleDeclaration & { WebkitOverflowScrolling?: string };
-      const previousOverflowY = inlineStyle.overflowY;
-      const previousWebkitOverflowScrolling = inlineStyle.WebkitOverflowScrolling ?? '';
+      const pendingRestore = pendingScrollRestoresRef.current.get(container);
+      const originalOverflowY = pendingRestore?.overflowY ?? inlineStyle.overflowY;
+      const originalWebkitOverflowScrolling =
+        pendingRestore?.webkitOverflowScrolling ?? inlineStyle.WebkitOverflowScrolling ?? '';
+
+      if (pendingRestore) {
+        window.cancelAnimationFrame(pendingRestore.frameId);
+      }
 
       inlineStyle.overflowY = 'hidden';
       inlineStyle.WebkitOverflowScrolling = 'auto';
       container.scrollTop = scrollTop;
 
-      window.requestAnimationFrame(() => {
-        inlineStyle.overflowY = previousOverflowY;
-        inlineStyle.WebkitOverflowScrolling = previousWebkitOverflowScrolling;
+      const frameId = window.requestAnimationFrame(() => {
+        const latestPendingRestore = pendingScrollRestoresRef.current.get(container);
+        if (!latestPendingRestore || latestPendingRestore.frameId !== frameId) return;
+
+        inlineStyle.overflowY = latestPendingRestore.overflowY;
+        inlineStyle.WebkitOverflowScrolling = latestPendingRestore.webkitOverflowScrolling;
         container.scrollTop = scrollTop;
+        pendingScrollRestoresRef.current.delete(container);
+      });
+
+      pendingScrollRestoresRef.current.set(container, {
+        overflowY: originalOverflowY,
+        webkitOverflowScrolling: originalWebkitOverflowScrolling,
+        frameId,
       });
     });
   };
@@ -76,6 +99,13 @@ export function MobileFloatingControls({
       didStopScrollOnPressRef.current = false;
     }
   }, [isOpen]);
+
+  useEffect(() => () => {
+    pendingScrollRestoresRef.current.forEach((restore) => {
+      window.cancelAnimationFrame(restore.frameId);
+    });
+    pendingScrollRestoresRef.current.clear();
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
