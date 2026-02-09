@@ -416,6 +416,10 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
           Search
         </button>
       </div>
+
+      <div className="mt-3 text-sm text-slate-400">
+        {isLoading ? 'Loading users...' : `${totalCount} user${totalCount === 1 ? '' : 's'} found`}
+      </div>
     </div>
   );
 
@@ -431,10 +435,6 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
                 {error}
               </div>
             )}
-
-            <div className="mb-3 text-sm text-slate-400">
-              {isLoading ? 'Loading users...' : `${totalCount} user${totalCount === 1 ? '' : 's'} found`}
-            </div>
           </div>
 
           <div
@@ -579,6 +579,10 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
               )}
             </div>
           )}
+
+          <div className="pt-1 text-center text-sm text-slate-400">
+            {isLoading ? 'Loading users...' : `${totalCount} user${totalCount === 1 ? '' : 's'} found`}
+          </div>
 
           {!isLoading && !hasMore && users.length > 0 && (
             <div className="pt-1 text-center text-xs text-slate-500">All users loaded</div>

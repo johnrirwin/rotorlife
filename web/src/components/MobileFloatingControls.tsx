@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 
 interface MobileFloatingControlsProps {
@@ -17,6 +18,24 @@ export function MobileFloatingControls({
   className,
   panelClassName,
 }: MobileFloatingControlsProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const closeControls = () => {
+      onToggle();
+    };
+
+    window.addEventListener('scroll', closeControls, { passive: true });
+    window.addEventListener('touchmove', closeControls, { passive: true });
+    window.addEventListener('wheel', closeControls, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', closeControls);
+      window.removeEventListener('touchmove', closeControls);
+      window.removeEventListener('wheel', closeControls);
+    };
+  }, [isOpen, onToggle]);
+
   return (
     <div className={`md:hidden absolute top-5 left-4 right-4 z-20 pointer-events-none ${className ?? ''}`}>
       <div className="pointer-events-auto">
