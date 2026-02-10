@@ -600,7 +600,7 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 
-	file, header, err := r.FormFile("image")
+	file, _, err := r.FormFile("image")
 	if err != nil {
 		api.logger.Error("Failed to get image from form", logging.WithField("error", err.Error()))
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -610,29 +610,25 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 	}
 	defer file.Close()
 
-	// Validate file size (1MB max)
-	if header.Size > 1024*1024 {
-		api.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "File too large. Maximum size is 1MB.",
-		})
-		return
-	}
-
-	// Validate content type
-	contentType := header.Header.Get("Content-Type")
-	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/webp" {
-		api.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "Image must be JPEG, PNG, or WebP",
-		})
-		return
-	}
-
 	// Read image data
 	imageData, err := io.ReadAll(file)
 	if err != nil {
 		api.logger.Error("Failed to read image data", logging.WithField("error", err.Error()))
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "Failed to read image",
+		})
+		return
+	}
+	if len(imageData) > 1024*1024 {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "File too large. Maximum size is 1MB.",
+		})
+		return
+	}
+	contentType, ok := detectAllowedImageContentType(imageData)
+	if !ok {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "Image must be JPEG, PNG, or WebP",
 		})
 		return
 	}
@@ -701,7 +697,7 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 	api.logger.Info("Admin uploaded gear image",
 		logging.WithField("gearId", id),
 		logging.WithField("adminId", userID),
-		logging.WithField("size", header.Size),
+		logging.WithField("size", len(imageData)),
 	)
 
 	api.writeJSON(w, http.StatusOK, map[string]string{

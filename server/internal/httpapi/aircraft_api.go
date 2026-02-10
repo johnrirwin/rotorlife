@@ -550,20 +550,13 @@ func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, airc
 		return
 	}
 
-	file, header, err := r.FormFile("image")
+	file, _, err := r.FormFile("image")
 	if err != nil {
 		api.logger.Error("Failed to get image from form", logging.WithField("error", err.Error()))
 		http.Error(w, "Image file required", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
-
-	// Validate content type
-	contentType = header.Header.Get("Content-Type")
-	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/webp" {
-		http.Error(w, "Image must be JPEG, PNG, or WebP", http.StatusBadRequest)
-		return
-	}
 
 	// Read image data
 	imageData, err := io.ReadAll(file)
@@ -572,13 +565,18 @@ func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, airc
 		http.Error(w, "Failed to read image", http.StatusInternalServerError)
 		return
 	}
+	detectedContentType, ok := detectAllowedImageContentType(imageData)
+	if !ok {
+		http.Error(w, "Image must be JPEG, PNG, or WebP", http.StatusBadRequest)
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
 	params := models.SetAircraftImageParams{
 		AircraftID: aircraftID,
-		ImageType:  contentType,
+		ImageType:  detectedContentType,
 		ImageData:  imageData,
 	}
 

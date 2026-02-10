@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -203,19 +204,6 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.Context().Value(auth.UserIDKey).(string)
 
-	var req struct {
-		UploadID string `json:"uploadId"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
-		return
-	}
-	req.UploadID = strings.TrimSpace(req.UploadID)
-	if req.UploadID == "" {
-		api.writeError(w, http.StatusBadRequest, "invalid_request", "uploadId is required")
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
@@ -230,20 +218,103 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := api.imageSvc.PersistApprovedUpload(ctx, userID, req.UploadID, models.ImageEntityAvatar, userID)
-	if err != nil {
-		switch err {
-		case images.ErrPendingUploadNotFound:
-			api.writeError(w, http.StatusUnprocessableEntity, "not_approved", "image approval token expired or missing")
+	var (
+		asset *models.ImageAsset
+	)
+
+	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	switch {
+	case strings.HasPrefix(contentType, "application/json"):
+		var req struct {
+			UploadID string `json:"uploadId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
 			return
-		case images.ErrUploadNotApproved:
-			api.writeError(w, http.StatusUnprocessableEntity, "not_approved", "image is not approved")
+		}
+		req.UploadID = strings.TrimSpace(req.UploadID)
+		if req.UploadID == "" {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "uploadId is required")
 			return
-		default:
-			api.logger.Error("Failed to persist approved avatar image", logging.WithField("error", err.Error()))
+		}
+
+		var err error
+		asset, err = api.imageSvc.PersistApprovedUpload(ctx, userID, req.UploadID, models.ImageEntityAvatar, userID)
+		if err != nil {
+			switch err {
+			case images.ErrPendingUploadNotFound:
+				api.writeError(w, http.StatusUnprocessableEntity, "not_approved", "image approval token expired or missing")
+				return
+			case images.ErrUploadNotApproved:
+				api.writeError(w, http.StatusUnprocessableEntity, "not_approved", "image is not approved")
+				return
+			default:
+				api.logger.Error("Failed to persist approved avatar image", logging.WithField("error", err.Error()))
+				api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to save avatar")
+				return
+			}
+		}
+	default:
+		const maxSize = int64(6 * 1024 * 1024)
+		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+		if err := r.ParseMultipartForm(maxSize); err != nil {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid upload payload")
+			return
+		}
+
+		file, _, err := r.FormFile("image")
+		if err != nil {
+			file, _, err = r.FormFile("avatar")
+		}
+		if err != nil {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "image file is required")
+			return
+		}
+		defer file.Close()
+
+		imageData, err := io.ReadAll(file)
+		if err != nil {
+			api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to read image")
+			return
+		}
+		if len(imageData) > 5*1024*1024 {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "image must be less than 5MB")
+			return
+		}
+		if _, ok := detectAllowedImageContentType(imageData); !ok {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "only JPEG, PNG, and WebP images are allowed")
+			return
+		}
+
+		decision, savedAsset, err := api.imageSvc.ModerateAndPersist(ctx, images.SaveRequest{
+			OwnerUserID: userID,
+			EntityType:  models.ImageEntityAvatar,
+			EntityID:    userID,
+			ImageBytes:  imageData,
+		})
+		if err != nil {
+			api.logger.Error("Failed to moderate avatar image", logging.WithField("error", err.Error()))
 			api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to save avatar")
 			return
 		}
+		if decision == nil || decision.Status != models.ImageModerationApproved {
+			if decision != nil && decision.Status == models.ImageModerationPendingReview {
+				api.writeError(w, http.StatusServiceUnavailable, "not_approved", "unable to verify right now")
+				return
+			}
+			reason := "image is not approved"
+			if decision != nil && strings.TrimSpace(decision.Reason) != "" {
+				reason = decision.Reason
+			}
+			api.writeError(w, http.StatusUnprocessableEntity, "not_approved", reason)
+			return
+		}
+		asset = savedAsset
+	}
+
+	if asset == nil {
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to save avatar")
+		return
 	}
 
 	avatarURL := "/api/images/" + asset.ID
@@ -266,10 +337,10 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"avatarUrl":       user.CustomAvatarURL,
-		"avatarType":      user.AvatarType,
-		"avatarImageId":   user.AvatarImageID,
-		"effectiveAvatar": user.EffectiveAvatarURL(),
+		"avatarUrl":          user.CustomAvatarURL,
+		"avatarType":         user.AvatarType,
+		"avatarImageAssetId": user.AvatarImageID,
+		"effectiveAvatar":    user.EffectiveAvatarURL(),
 	}
 
 	api.writeJSON(w, http.StatusOK, response)

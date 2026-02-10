@@ -273,7 +273,7 @@ export function MyProfile() {
         ...prev,
         customAvatarUrl: avatarResult.avatarUrl,
         avatarType: avatarResult.avatarType || 'custom',
-        avatarImageAssetId: avatarResult.avatarImageId,
+        avatarImageAssetId: avatarResult.avatarImageAssetId,
         effectiveAvatarUrl: newAvatarUrl,
       } : null);
 

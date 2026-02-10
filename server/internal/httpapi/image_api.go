@@ -77,21 +77,6 @@ func (api *ImageAPI) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := header.Header.Get("Content-Type")
-	allowed := map[string]bool{
-		"image/jpeg": true,
-		"image/jpg":  true,
-		"image/png":  true,
-		"image/webp": true,
-	}
-	if !allowed[contentType] {
-		api.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"status": "PENDING_REVIEW",
-			"reason": "Only JPEG, PNG, and WebP images are allowed",
-		})
-		return
-	}
-
 	entityType := models.ImageEntityOther
 	if raw := strings.TrimSpace(r.FormValue("entityType")); raw != "" {
 		switch models.ImageEntityType(raw) {
@@ -111,6 +96,13 @@ func (api *ImageAPI) handleUpload(w http.ResponseWriter, r *http.Request) {
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"status": "PENDING_REVIEW",
 			"reason": "Failed to read image",
+		})
+		return
+	}
+	if _, ok := detectAllowedImageContentType(imageData); !ok {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"status": "PENDING_REVIEW",
+			"reason": "Only JPEG, PNG, and WebP images are allowed",
 		})
 		return
 	}
@@ -172,7 +164,14 @@ func (api *ImageAPI) handleGetImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := http.DetectContentType(asset.ImageBytes)
+	contentType, ok := detectAllowedImageContentType(asset.ImageBytes)
+	if !ok {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		http.Error(w, "unsupported media type", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", strconv.Itoa(len(asset.ImageBytes)))
 	w.Header().Set("Cache-Control", "public, max-age=300")

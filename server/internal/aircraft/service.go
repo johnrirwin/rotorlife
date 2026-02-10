@@ -123,9 +123,6 @@ func (s *Service) SetComponent(ctx context.Context, userID string, params models
 	if aircraft == nil {
 		return nil, &ServiceError{Message: "aircraft not found"}
 	}
-	if s.imageSvc == nil {
-		return nil, &ServiceError{Message: "image moderation unavailable"}
-	}
 
 	inventoryItemID := params.InventoryItemID
 
@@ -364,7 +361,7 @@ func (s *Service) SetImage(ctx context.Context, userID string, params models.Set
 
 	s.logger.Info("Set aircraft image", logging.WithFields(map[string]interface{}{
 		"aircraft_id": params.AircraftID,
-		"size":        len(params.ImageData),
+		"size":        len(asset.ImageBytes),
 	}))
 	return decision, nil
 }
