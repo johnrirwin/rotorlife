@@ -10,6 +10,20 @@ interface AdminGearModerationProps {
   authLoading?: boolean;
 }
 
+function formatDate(value?: string): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString();
+}
+
+function formatDateTime(value?: string): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString();
+}
+
 export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGearModerationProps) {
   const [items, setItems] = useState<GearCatalogItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -35,9 +49,6 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [modalKey, setModalKey] = useState(0);
   const [showAddGearModal, setShowAddGearModal] = useState(false);
-  const [deleteTargetItem, setDeleteTargetItem] = useState<GearCatalogItem | null>(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [isDeletingItem, setIsDeletingItem] = useState(false);
   const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
 
   const loadItems = useCallback(async (reset = false, forceRefresh = false) => {
@@ -155,42 +166,10 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
     loadItems(true);
   };
 
-  const handleDeleteClick = useCallback((item: GearCatalogItem) => {
-    setDeleteTargetItem(item);
-    setDeleteConfirmText('');
-    setError(null);
-  }, []);
-
-  const handleCancelDelete = useCallback(() => {
-    if (isDeletingItem) return;
-    setDeleteTargetItem(null);
-    setDeleteConfirmText('');
-  }, [isDeletingItem]);
-
-  const handleConfirmDelete = useCallback(async () => {
-    if (!deleteTargetItem) return;
-
-    const requiresTypedDelete = deleteTargetItem.usageCount > 0;
-    if (requiresTypedDelete && deleteConfirmText.trim().toLowerCase() !== 'delete') {
-      return;
-    }
-
-    setIsDeletingItem(true);
-    setError(null);
-    try {
-      await adminDeleteGear(deleteTargetItem.id);
-      if (editingItemId === deleteTargetItem.id) {
-        setEditingItemId(null);
-      }
-      setDeleteTargetItem(null);
-      setDeleteConfirmText('');
-      await loadItems(true, true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete gear item');
-    } finally {
-      setIsDeletingItem(false);
-    }
-  }, [deleteConfirmText, deleteTargetItem, editingItemId, loadItems]);
+  const handleEditDelete = useCallback(() => {
+    setEditingItemId(null);
+    void loadItems(true, true);
+  }, [loadItems]);
 
   const handleAddGearClick = () => {
     setShowAddGearModal(true);
@@ -357,7 +336,10 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
             <thead className="bg-slate-700/50">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
-                  Created
+                  Upload Date
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+                  Last Edit
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
                   Type
@@ -374,60 +356,63 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
                   Image
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
-                  Actions
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {items.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-700/30">
-                  <td className="px-4 py-3 text-sm text-slate-400">
-                    {new Date(item.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-300">
-                    <span className="px-2 py-0.5 bg-slate-700 rounded text-xs">
-                      {item.gearType}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-white font-medium">
-                    {item.brand}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-300">
-                    {item.model}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-400">
-                    {item.variant || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {item.imageStatus === 'approved' ? (
-                      <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
-                        Approved
+              {items.map((item) => {
+                const displayName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`.trim();
+                const isSelected = editingItemId === item.id;
+                return (
+                  <tr
+                    key={item.id}
+                    onClick={() => handleEditClick(item)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleEditClick(item);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open editor for ${displayName}`}
+                    className={`transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset focus-visible:bg-primary-600/20 ${
+                      isSelected ? 'bg-primary-600/10' : 'hover:bg-slate-700/30'
+                    }`}
+                  >
+                    <td className="px-4 py-3 text-sm text-slate-400">
+                      {formatDate(item.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-400">
+                      {formatDate(item.updatedAt)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-300">
+                      <span className="px-2 py-0.5 bg-slate-700 rounded text-xs">
+                        {item.gearType}
                       </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs">
-                        Missing
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEditClick(item)}
-                        className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(item)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-white font-medium">
+                      {item.brand}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-300">
+                      {item.model}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-400">
+                      {item.variant || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {item.imageStatus === 'approved' ? (
+                        <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
+                          Approved
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs">
+                          Missing
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -446,9 +431,15 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           </div>
         ) : (
           items.map((item) => (
-            <div
+            <button
+              type="button"
               key={item.id}
-              className="bg-slate-800 rounded-lg p-4"
+              onClick={() => handleEditClick(item)}
+              className={`w-full text-left bg-slate-800 rounded-lg p-4 transition-colors border ${
+                editingItemId === item.id
+                  ? 'border-primary-500/50 bg-primary-600/10'
+                  : 'border-slate-700 hover:bg-slate-700/60'
+              }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -472,26 +463,20 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
                   {item.variant && (
                     <p className="text-sm text-slate-400 truncate">{item.variant}</p>
                   )}
-                  <p className="text-xs text-slate-500 mt-1">
-                    Added {new Date(item.createdAt).toLocaleDateString()}
-                  </p>
+                  <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
+                    <div>
+                      <p className="text-slate-500 uppercase tracking-wide">Upload</p>
+                      <p className="text-slate-300 mt-0.5">{formatDate(item.createdAt)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-slate-500 uppercase tracking-wide">Last Edit</p>
+                      <p className="text-slate-300 mt-0.5">{formatDate(item.updatedAt)}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => handleEditClick(item)}
-                    className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded transition-colors"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteClick(item)}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
+                <span className="text-xs text-slate-400 shrink-0">Edit</span>
               </div>
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -534,6 +519,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           itemId={editingItemId}
           onClose={handleEditClose}
           onSave={handleEditSave}
+          onDelete={handleEditDelete}
         />
       )}
 
@@ -544,92 +530,6 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
         startInCreateMode
         onUploadCatalogImage={adminUploadGearImage}
       />
-
-      {/* Delete Gear Confirmation Modal */}
-      {deleteTargetItem && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50">
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-white">Delete Gear Item?</h3>
-              </div>
-              <button
-                onClick={handleCancelDelete}
-                disabled={isDeletingItem}
-                aria-label="Close delete gear modal"
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="mb-4">
-              <p className="text-slate-300 mb-3">
-                <strong className="text-red-400">This action cannot be undone.</strong> Deleting this catalog item will permanently remove:
-              </p>
-              <ul className="text-sm text-slate-400 space-y-2 mb-4">
-                <li className="flex items-start gap-2">
-                  <span className="text-red-400 mt-0.5">•</span>
-                  <span>
-                    Catalog entry for <span className="font-medium text-slate-200">{deleteTargetItem.brand} {deleteTargetItem.model}{deleteTargetItem.variant ? ` ${deleteTargetItem.variant}` : ''}</span>
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-red-400 mt-0.5">•</span>
-                  <span>Any curated catalog image associated with this item</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-red-400 mt-0.5">•</span>
-                  <span>Catalog links from related inventory records (inventory items themselves are kept)</span>
-                </li>
-              </ul>
-
-              {deleteTargetItem.usageCount > 0 && (
-                <>
-                  <p className="text-sm text-amber-300 mb-2">
-                    This item is currently linked to {deleteTargetItem.usageCount} inventory record{deleteTargetItem.usageCount !== 1 ? 's' : ''}.
-                  </p>
-                  <p className="text-sm text-slate-400">
-                    Type <span className="font-mono text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded">delete</span> to confirm:
-                  </p>
-                </>
-              )}
-            </div>
-
-            {deleteTargetItem.usageCount > 0 && (
-              <input
-                type="text"
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                placeholder="Type 'delete' to confirm"
-                className="w-full px-4 py-2 bg-slate-700 border border-red-500/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
-                autoFocus
-                disabled={isDeletingItem}
-              />
-            )}
-
-            <div className="flex">
-              <button
-                onClick={() => void handleConfirmDelete()}
-                disabled={
-                  isDeletingItem ||
-                  (deleteTargetItem.usageCount > 0 && deleteConfirmText.trim().toLowerCase() !== 'delete')
-                }
-                className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isDeletingItem ? 'Deleting...' : 'Delete Item'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -639,9 +539,10 @@ interface AdminGearEditModalProps {
   itemId: string;
   onClose: () => void;
   onSave: () => void;
+  onDelete: () => void;
 }
 
-function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps) {
+function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEditModalProps) {
   const [item, setItem] = useState<GearCatalogItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [brand, setBrand] = useState('');
@@ -654,7 +555,12 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [deleteImage, setDeleteImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
   
   // Fetch fresh item data when modal opens
   useEffect(() => {
@@ -732,12 +638,104 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
     setImagePreview(null);
   };
 
+  const closeDeleteConfirm = useCallback(() => {
+    if (isDeleting) return;
+    setShowDeleteConfirm(false);
+    setDeleteConfirmText('');
+  }, [isDeleting]);
+
+  useEffect(() => {
+    if (!showDeleteConfirm) {
+      previouslyFocusedElementRef.current?.focus();
+      previouslyFocusedElementRef.current = null;
+      return;
+    }
+
+    previouslyFocusedElementRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const dialog = deleteDialogRef.current;
+    if (!dialog) return;
+
+    const getFocusableElements = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+
+    const initialFocusTarget =
+      dialog.querySelector<HTMLElement>('[data-delete-initial-focus="true"]') ?? getFocusableElements()[0];
+    initialFocusTarget?.focus();
+
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeDeleteConfirm();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey) {
+        if (activeElement === firstElement || activeElement === dialog) {
+          event.preventDefault();
+          lastElement.focus();
+        }
+        return;
+      }
+
+      if (activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    dialog.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      dialog.removeEventListener('keydown', handleDialogKeyDown);
+    };
+  }, [closeDeleteConfirm, showDeleteConfirm]);
+
+  const handleDeleteItem = async () => {
+    if (!item) return;
+
+    const requiresTypedDelete = item.usageCount > 0;
+    if (requiresTypedDelete && deleteConfirmText.trim().toLowerCase() !== 'delete') {
+      return;
+    }
+
+    setIsDeleting(true);
+    setError(null);
+    try {
+      await adminDeleteGear(item.id);
+      setShowDeleteConfirm(false);
+      setDeleteConfirmText('');
+      setIsDeleting(false);
+      onDelete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete gear item');
+      setIsDeleting(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!item) return;
+
     setIsSaving(true);
     setError(null);
-
-    if (!item) return;
 
     try {
       const params: AdminUpdateGearCatalogParams = {};
@@ -831,7 +829,10 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
       />
 
       {/* Modal */}
-      <div className="relative bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+      <div
+        className="relative bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+        aria-hidden={showDeleteConfirm}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <h2 className="text-lg font-semibold text-white">
@@ -861,7 +862,10 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
               <strong>Gear Type:</strong> {item.gearType}
             </p>
             <p className="text-sm text-slate-400 mt-1">
-              <strong>Created:</strong> {new Date(item.createdAt).toLocaleString()}
+              <strong>Upload Date:</strong> {formatDateTime(item.createdAt)}
+            </p>
+            <p className="text-sm text-slate-400 mt-1">
+              <strong>Last Edit:</strong> {formatDateTime(item.updatedAt)}
             </p>
             <p className="text-sm text-slate-400 mt-1">
               <strong>Image Status:</strong>{' '}
@@ -1023,14 +1027,23 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
               </p>
             )}
           </div>
+
         </form>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50">
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50">
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isSaving || isDeleting || showDeleteConfirm}
+            className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+          >
+            Delete Item
+          </button>
           <button
             type="submit"
             form="gear-edit-form"
-            disabled={isSaving}
+            disabled={isSaving || isDeleting || showDeleteConfirm}
             className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
           >
             {isSaving ? (
@@ -1049,6 +1062,110 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
           </button>
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={closeDeleteConfirm} />
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-gear-dialog-title"
+            aria-describedby="delete-gear-dialog-description"
+            tabIndex={-1}
+            className="relative bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50"
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <h3 id="delete-gear-dialog-title" className="text-lg font-semibold text-white">Delete Gear Item?</h3>
+              </div>
+              <button
+                onClick={closeDeleteConfirm}
+                disabled={isDeleting}
+                aria-label="Close delete gear modal"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div id="delete-gear-dialog-description" className="mb-4">
+              <p className="text-slate-300 mb-3">
+                <strong className="text-red-400">This action cannot be undone.</strong> Deleting this catalog item will permanently remove:
+              </p>
+              <ul className="text-sm text-slate-400 space-y-2 mb-4">
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>
+                    Catalog entry for <span className="font-medium text-slate-200">{item.brand} {item.model}{item.variant ? ` ${item.variant}` : ''}</span>
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Any curated catalog image associated with this item</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Catalog links from related inventory records (inventory items themselves are kept)</span>
+                </li>
+              </ul>
+
+              {item.usageCount > 0 && (
+                <>
+                  <p className="text-sm text-amber-300 mb-2">
+                    This item is currently linked to {item.usageCount} inventory record{item.usageCount !== 1 ? 's' : ''}.
+                  </p>
+                  <p className="text-sm text-slate-400">
+                    Type <span className="font-mono text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded">delete</span> to confirm:
+                  </p>
+                </>
+              )}
+            </div>
+
+            {item.usageCount > 0 && (
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type 'delete' to confirm"
+                className="w-full px-4 py-2 bg-slate-700 border border-red-500/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
+                data-delete-initial-focus="true"
+                disabled={isDeleting}
+              />
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDeleteConfirm}
+                disabled={isDeleting}
+                data-delete-initial-focus={item.usageCount === 0 ? 'true' : undefined}
+                className="px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteItem()}
+                disabled={
+                  isDeleting ||
+                  (item.usageCount > 0 && deleteConfirmText.trim().toLowerCase() !== 'delete')
+                }
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
