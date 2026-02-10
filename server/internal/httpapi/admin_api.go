@@ -13,6 +13,7 @@ import (
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/database"
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
@@ -21,15 +22,17 @@ import (
 type AdminAPI struct {
 	catalogStore   *database.GearCatalogStore
 	userStore      *database.UserStore
+	imageSvc       *images.Service
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
 }
 
 // NewAdminAPI creates a new admin API handler
-func NewAdminAPI(catalogStore *database.GearCatalogStore, userStore *database.UserStore, authMiddleware *auth.Middleware, logger *logging.Logger) *AdminAPI {
+func NewAdminAPI(catalogStore *database.GearCatalogStore, userStore *database.UserStore, imageSvc *images.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *AdminAPI {
 	return &AdminAPI{
 		catalogStore:   catalogStore,
 		userStore:      userStore,
+		imageSvc:       imageSvc,
 		authMiddleware: authMiddleware,
 		logger:         logger,
 	}
@@ -531,6 +534,9 @@ func (api *AdminAPI) handleDeleteAdminUserAvatar(w http.ResponseWriter, r *http.
 		})
 		return
 	}
+	if existing.AvatarImageID != "" {
+		_ = api.imageSvc.Delete(ctx, existing.AvatarImageID)
+	}
 
 	api.logger.Info("Admin removed user avatar",
 		logging.WithField("targetUserId", id),
@@ -651,15 +657,45 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 	}
 
 	// Store the image
-	if err := api.catalogStore.SetImage(ctx, id, userID, contentType, imageData); err != nil {
+	decision, asset, err := api.imageSvc.ModerateAndPersist(ctx, images.SaveRequest{
+		OwnerUserID: userID,
+		EntityType:  models.ImageEntityGear,
+		EntityID:    id,
+		ImageBytes:  imageData,
+	})
+	if err != nil {
+		api.logger.Error("Failed to moderate gear image", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to moderate image",
+		})
+		return
+	}
+	if decision.Status != models.ImageModerationApproved {
+		statusCode := http.StatusUnprocessableEntity
+		if decision.Status == models.ImageModerationPendingReview {
+			statusCode = http.StatusServiceUnavailable
+		}
+		api.writeJSON(w, statusCode, map[string]string{
+			"status": string(decision.Status),
+			"error":  decision.Reason,
+		})
+		return
+	}
+
+	previousAssetID, err := api.catalogStore.SetImage(ctx, id, userID, contentType, asset.ID)
+	if err != nil {
 		api.logger.Error("Failed to store gear image", logging.WithFields(map[string]interface{}{
 			"gearId": id,
 			"error":  err.Error(),
 		}))
+		_ = api.imageSvc.Delete(ctx, asset.ID)
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "Failed to store image",
 		})
 		return
+	}
+	if previousAssetID != "" && previousAssetID != asset.ID {
+		_ = api.imageSvc.Delete(ctx, previousAssetID)
 	}
 
 	api.logger.Info("Admin uploaded gear image",
@@ -692,6 +728,9 @@ func (api *AdminAPI) getGearImage(w http.ResponseWriter, r *http.Request, id str
 		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "no image for this gear item"})
 		return
 	}
+	if imageType == "" {
+		imageType = http.DetectContentType(imageData)
+	}
 
 	// No caching for admin endpoint - admins need to see latest image
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -707,7 +746,8 @@ func (api *AdminAPI) deleteGearImage(w http.ResponseWriter, r *http.Request, id 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	if err := api.catalogStore.DeleteImage(ctx, id); err != nil {
+	previousAssetID, err := api.catalogStore.DeleteImage(ctx, id)
+	if err != nil {
 		api.logger.Error("Failed to delete gear image", logging.WithFields(map[string]interface{}{
 			"gearId": id,
 			"error":  err.Error(),
@@ -716,6 +756,9 @@ func (api *AdminAPI) deleteGearImage(w http.ResponseWriter, r *http.Request, id 
 			"error": "Failed to delete image",
 		})
 		return
+	}
+	if previousAssetID != "" {
+		_ = api.imageSvc.Delete(ctx, previousAssetID)
 	}
 
 	api.logger.Info("Admin deleted gear image",
