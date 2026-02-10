@@ -237,7 +237,13 @@ func (a *App) initDatabaseServices() {
 			logging.WithField("error", err.Error()))
 		moderatorSvc = &moderation.MockModerator{Err: fmt.Errorf("moderation unavailable")}
 	}
-	pendingStore := images.NewInMemoryPendingStore(a.Config.Moderation.PendingUploadTTL)
+	var pendingStore images.PendingStore = images.NewInMemoryPendingStore(a.Config.Moderation.PendingUploadTTL)
+	if redisCache, ok := a.Cache.(*cache.RedisCache); ok {
+		a.Logger.Info("Using Redis pending upload store")
+		pendingStore = images.NewRedisPendingStore(redisCache.Client(), a.Config.Moderation.PendingUploadTTL)
+	} else {
+		a.Logger.Info("Using in-memory pending upload store")
+	}
 	a.imageSvc = images.NewService(moderatorSvc, a.imageAssetStore, pendingStore, a.Config.Moderation.Timeout)
 
 	// Initialize gear catalog store (before aircraft, since aircraft contributes to catalog)

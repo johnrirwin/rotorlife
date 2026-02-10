@@ -3,6 +3,7 @@ package images
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/johnrirwin/flyingforge/internal/models"
@@ -72,11 +73,17 @@ func NewService(moderator Moderator, storage Storage, pending PendingStore, time
 	}
 }
 
-// ModerateUpload runs synchronous moderation and, if approved, stores an in-memory pending token.
+// ModerateUpload runs synchronous moderation and, if approved, stores a pending token.
 func (s *Service) ModerateUpload(ctx context.Context, ownerUserID string, entityType models.ImageEntityType, imageBytes []byte) (*models.ModerationDecision, string, error) {
 	decision := s.moderate(ctx, imageBytes)
 	if decision.Status != models.ImageModerationApproved {
 		return decision, "", nil
+	}
+	if s.pending == nil {
+		return &models.ModerationDecision{
+			Status: models.ImageModerationPendingReview,
+			Reason: "Unable to verify right now",
+		}, "", nil
 	}
 
 	uploadID := s.pending.Put(PendingUpload{
@@ -85,6 +92,12 @@ func (s *Service) ModerateUpload(ctx context.Context, ownerUserID string, entity
 		ImageBytes:  imageBytes,
 		Decision:    *decision,
 	})
+	if strings.TrimSpace(uploadID) == "" {
+		return &models.ModerationDecision{
+			Status: models.ImageModerationPendingReview,
+			Reason: "Unable to verify right now",
+		}, "", nil
+	}
 
 	return decision, uploadID, nil
 }
@@ -108,6 +121,10 @@ func (s *Service) ModerateAndPersist(ctx context.Context, req SaveRequest) (*mod
 
 // PersistApprovedUpload stores a previously approved pending upload.
 func (s *Service) PersistApprovedUpload(ctx context.Context, ownerUserID, uploadID string, entityType models.ImageEntityType, entityID string) (*models.ImageAsset, error) {
+	if s.pending == nil {
+		return nil, ErrPendingUploadNotFound
+	}
+
 	pendingUpload, ok := s.pending.Get(ownerUserID, uploadID)
 	if !ok {
 		return nil, ErrPendingUploadNotFound

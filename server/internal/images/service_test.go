@@ -27,6 +27,23 @@ type fakeStorage struct {
 	saved []*models.ImageAsset
 }
 
+type failingPendingStore struct{}
+
+func (f *failingPendingStore) Put(upload PendingUpload) string {
+	_ = upload
+	return ""
+}
+
+func (f *failingPendingStore) Get(ownerUserID, uploadID string) (*PendingUpload, bool) {
+	_ = ownerUserID
+	_ = uploadID
+	return nil, false
+}
+
+func (f *failingPendingStore) Delete(uploadID string) {
+	_ = uploadID
+}
+
 func (f *fakeStorage) Save(ctx context.Context, req SaveRequest) (*models.ImageAsset, error) {
 	_ = ctx
 	asset := &models.ImageAsset{
@@ -132,5 +149,30 @@ func TestServicePersistApprovedUpload(t *testing.T) {
 	}
 	if len(store.saved) != 1 {
 		t.Fatalf("expected one save, got %d", len(store.saved))
+	}
+}
+
+func TestServiceModerateUploadPendingStoreFailure(t *testing.T) {
+	svc := NewService(
+		&fakeModerator{
+			decision: &models.ModerationDecision{
+				Status: models.ImageModerationApproved,
+				Reason: "Approved",
+			},
+		},
+		&fakeStorage{},
+		&failingPendingStore{},
+		5*time.Second,
+	)
+
+	decision, uploadID, err := svc.ModerateUpload(context.Background(), "user-1", models.ImageEntityAvatar, []byte("abc"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if decision.Status != models.ImageModerationPendingReview {
+		t.Fatalf("status=%s", decision.Status)
+	}
+	if uploadID != "" {
+		t.Fatalf("expected empty upload id")
 	}
 }
