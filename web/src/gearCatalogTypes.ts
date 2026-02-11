@@ -33,10 +33,10 @@ export const GEAR_TYPES: { value: GearType; label: string }[] = [
 ];
 
 // Catalog item status
-export type CatalogItemStatus = 'active' | 'pending' | 'flagged' | 'rejected';
+export type CatalogItemStatus = 'published' | 'pending' | 'removed';
 
 // Persisted curation status stored on catalog items.
-export type ImageCurationStatus = 'missing' | 'approved';
+export type ImageCurationStatus = 'missing' | 'scanned' | 'approved';
 // Filter-only values used by admin moderation search controls.
 export type ImageStatusFilter = ImageCurationStatus | 'recently-curated' | 'all';
 // Backward-compatible alias for persisted status fields.
@@ -122,7 +122,9 @@ export interface AdminUpdateGearCatalogParams {
   msrp?: number;
   clearMsrp?: boolean; // Explicitly clear MSRP when true
   imageUrl?: string;
+  imageStatus?: ImageCurationStatus;
   bestFor?: DroneType[]; // Drone types this gear is best suited for
+  status?: CatalogItemStatus;
 }
 
 // Admin search parameters
@@ -130,6 +132,7 @@ export interface AdminGearSearchParams {
   query?: string;
   gearType?: GearType;
   brand?: string;
+  status?: CatalogItemStatus;
   imageStatus?: ImageStatusFilter;
   limit?: number;
   offset?: number;

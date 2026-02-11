@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/database"
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
@@ -19,14 +21,16 @@ import (
 // GearCatalogAPI handles HTTP API requests for the gear catalog
 type GearCatalogAPI struct {
 	catalogStore   *database.GearCatalogStore
+	imageSvc       *images.Service
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
 }
 
 // NewGearCatalogAPI creates a new gear catalog API handler
-func NewGearCatalogAPI(catalogStore *database.GearCatalogStore, authMiddleware *auth.Middleware, logger *logging.Logger) *GearCatalogAPI {
+func NewGearCatalogAPI(catalogStore *database.GearCatalogStore, imageSvc *images.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *GearCatalogAPI {
 	return &GearCatalogAPI{
 		catalogStore:   catalogStore,
+		imageSvc:       imageSvc,
 		authMiddleware: authMiddleware,
 		logger:         logger,
 	}
@@ -209,11 +213,16 @@ func (api *GearCatalogAPI) handleCatalogItem(w http.ResponseWriter, r *http.Requ
 	// Handle image endpoint (public, no auth required)
 	if strings.HasSuffix(id, "/image") {
 		id = strings.TrimSuffix(id, "/image")
-		if r.Method == http.MethodGet {
+		switch r.Method {
+		case http.MethodGet:
 			api.getGearImage(w, r, id)
-			return
+		case http.MethodPost:
+			api.authMiddleware.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
+				api.uploadGearImage(w, r, id)
+			})(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -276,9 +285,9 @@ func (api *GearCatalogAPI) flagCatalogItem(w http.ResponseWriter, r *http.Reques
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	err := api.catalogStore.UpdateStatus(ctx, id, models.CatalogStatusFlagged)
+	err := api.catalogStore.UpdateStatus(ctx, id, models.CatalogStatusRemoved)
 	if err != nil {
-		api.logger.Error("Failed to flag catalog item", logging.WithFields(map[string]interface{}{
+		api.logger.Error("Failed to remove catalog item", logging.WithFields(map[string]interface{}{
 			"id":     id,
 			"reason": body.Reason,
 			"error":  err.Error(),
@@ -289,13 +298,13 @@ func (api *GearCatalogAPI) flagCatalogItem(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	api.logger.Info("Catalog item flagged", logging.WithFields(map[string]interface{}{
+	api.logger.Info("Catalog item removed", logging.WithFields(map[string]interface{}{
 		"id":     id,
 		"reason": body.Reason,
 	}))
 
 	api.writeJSON(w, http.StatusOK, map[string]string{
-		"status": "flagged",
+		"status": string(models.CatalogStatusRemoved),
 	})
 }
 
@@ -416,4 +425,104 @@ func (api *GearCatalogAPI) getGearImage(w http.ResponseWriter, r *http.Request, 
 	w.Header().Set("Content-Type", imageType)
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
 	w.Write(imageData)
+}
+
+// uploadGearImage persists a previously moderated user-submitted gear image.
+// This sets image_status=scanned so admins can still curate/approve the catalog image.
+func (api *GearCatalogAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id string) {
+	if api.imageSvc == nil {
+		api.writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "image moderation unavailable",
+		})
+		return
+	}
+
+	userID := auth.GetUserID(r.Context())
+	if userID == "" {
+		api.writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "authentication required",
+		})
+		return
+	}
+
+	var req struct {
+		UploadID string `json:"uploadId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "invalid request body",
+		})
+		return
+	}
+	req.UploadID = strings.TrimSpace(req.UploadID)
+	if req.UploadID == "" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "uploadId is required",
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	asset, err := api.imageSvc.PersistApprovedUpload(ctx, userID, req.UploadID, models.ImageEntityGear, id)
+	if err != nil {
+		switch err {
+		case images.ErrPendingUploadNotFound:
+			api.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+				"error": "image approval token expired or missing",
+			})
+			return
+		case images.ErrUploadNotApproved:
+			api.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+				"error": "image is not approved",
+			})
+			return
+		default:
+			api.logger.Error("Failed to persist approved gear image", logging.WithField("error", err.Error()))
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "failed to save image",
+			})
+			return
+		}
+	}
+
+	contentType, ok := detectAllowedImageContentType(asset.ImageBytes)
+	if !ok {
+		_ = api.imageSvc.Delete(ctx, asset.ID)
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "only JPEG, PNG, and WebP images are allowed",
+		})
+		return
+	}
+
+	previousAssetID, err := api.catalogStore.SetUserSubmittedImage(ctx, id, contentType, asset.ID)
+	if err != nil {
+		_ = api.imageSvc.Delete(ctx, asset.ID)
+		if errors.Is(err, database.ErrCatalogItemNotFound) {
+			api.writeJSON(w, http.StatusNotFound, map[string]string{
+				"error": "gear item not found",
+			})
+			return
+		}
+		if errors.Is(err, database.ErrCatalogImageAlreadyCurated) {
+			api.writeJSON(w, http.StatusConflict, map[string]string{
+				"error": "gear item already has a curated image",
+			})
+			return
+		}
+		api.logger.Error("Failed to set user-submitted gear image", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to save image",
+		})
+		return
+	}
+	if previousAssetID != "" && previousAssetID != asset.ID {
+		_ = api.imageSvc.Delete(ctx, previousAssetID)
+	}
+
+	api.writeJSON(w, http.StatusOK, map[string]string{
+		"status":  string(models.ImageModerationApproved),
+		"message": "Image uploaded and queued for admin review",
+	})
 }

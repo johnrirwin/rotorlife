@@ -13,6 +13,14 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
+export type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
+
+export interface ImageModerationResponse {
+  status: ModerationStatus;
+  reason?: string;
+  uploadId?: string;
+}
+
 // Get access token from localStorage
 function getAccessToken(): string | null {
   return localStorage.getItem('access_token');
@@ -96,6 +104,88 @@ export async function createGearCatalogItem(params: CreateGearCatalogParams): Pr
 }
 
 /**
+ * Run synchronous moderation for a user-submitted gear image.
+ * Returns APPROVED/REJECTED/PENDING_REVIEW and uploadId when approved.
+ */
+export async function moderateGearCatalogImageUpload(imageFile: File): Promise<ImageModerationResponse> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  formData.append('entityType', 'gear');
+
+  const response = await fetch(`${API_BASE}/api/images/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Failed to moderate image' }));
+    throw new Error(error.message || error.reason || error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Persist an approved moderated image token on a gear catalog item.
+ */
+export async function saveGearCatalogImageUpload(catalogId: string, uploadId: string): Promise<void> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+  if (!uploadId) {
+    throw new Error('uploadId is required');
+  }
+
+  const response = await fetch(`${API_BASE}/api/gear-catalog/${catalogId}/image`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ uploadId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Failed to upload image' }));
+    // If an item already has an admin-curated image, treat this as a no-op.
+    if (response.status === 409) {
+      return;
+    }
+    throw new Error(error.message || error.reason || error.error || `HTTP ${response.status}`);
+  }
+}
+
+/**
+ * Convenience helper for gear catalog image upload with moderation.
+ */
+export async function uploadGearCatalogImage(catalogId: string, imageFile: File): Promise<void> {
+  // Keep client-side validation aligned with catalog upload UI + backend limits.
+  if (imageFile.size > 1024 * 1024) {
+    throw new Error('Image file is too large. Maximum size is 1MB.');
+  }
+  const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!validTypes.includes(imageFile.type)) {
+    throw new Error('Invalid image type. Please use JPEG, PNG, or WebP.');
+  }
+
+  const moderation = await moderateGearCatalogImageUpload(imageFile);
+  if (moderation.status !== 'APPROVED' || !moderation.uploadId) {
+    throw new Error(moderation.reason || 'Image is not approved');
+  }
+
+  await saveGearCatalogImageUpload(catalogId, moderation.uploadId);
+}
+
+/**
  * Find near matches for potential duplicate detection before creating
  */
 export async function findNearMatches(params: NearMatchParams): Promise<NearMatchResponse> {
@@ -143,7 +233,7 @@ export async function typeaheadSearch(
     query,
     gearType,
     limit,
-    status: 'active',
+    status: 'published',
   });
 
   return response.items;

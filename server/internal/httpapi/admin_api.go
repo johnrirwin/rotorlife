@@ -114,11 +114,21 @@ func (api *AdminAPI) handleAdminGear(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
+	rawStatus := models.CatalogItemStatus(strings.TrimSpace(query.Get("status")))
+	status := models.CatalogItemStatus("")
+	if rawStatus != "" {
+		status = models.NormalizeCatalogStatus(rawStatus)
+		if !models.IsValidCatalogStatus(status) {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid status"})
+			return
+		}
+	}
 
 	params := models.AdminGearSearchParams{
 		Query:       query.Get("query"),
 		GearType:    models.GearType(query.Get("gearType")),
 		Brand:       query.Get("brand"),
+		Status:      status,
 		ImageStatus: models.ImageStatus(query.Get("imageStatus")),
 		Limit:       parseIntQuery(query.Get("limit"), 20),
 		Offset:      parseIntQuery(query.Get("offset"), 0),
@@ -143,6 +153,17 @@ func (api *AdminAPI) handleAdminGear(w http.ResponseWriter, r *http.Request) {
 func (api *AdminAPI) handleAdminGearByID(w http.ResponseWriter, r *http.Request) {
 	// Extract ID from path
 	path := strings.TrimPrefix(r.URL.Path, "/api/admin/gear/")
+
+	// Check if this is an image approval request
+	if strings.HasSuffix(path, "/image/approve") {
+		id := strings.TrimSuffix(path, "/image/approve")
+		if r.Method != http.MethodPost {
+			api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		api.approveGearImage(w, r, id)
+		return
+	}
 
 	// Check if this is an image request
 	if strings.HasSuffix(path, "/image") {
@@ -201,6 +222,25 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
+	}
+
+	if params.Status != nil {
+		normalizedStatus := models.NormalizeCatalogStatus(*params.Status)
+		if !models.IsValidCatalogStatus(normalizedStatus) {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid status"})
+			return
+		}
+		params.Status = &normalizedStatus
+	}
+
+	if params.ImageStatus != nil {
+		switch *params.ImageStatus {
+		case models.ImageStatusMissing, models.ImageStatusScanned, models.ImageStatusApproved:
+			// valid
+		default:
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid imageStatus"})
+			return
+		}
 	}
 
 	// Validate ImageURL if provided
@@ -764,5 +804,46 @@ func (api *AdminAPI) deleteGearImage(w http.ResponseWriter, r *http.Request, id 
 
 	api.writeJSON(w, http.StatusOK, map[string]string{
 		"message": "Image deleted successfully",
+	})
+}
+
+// approveGearImage handles POST /api/admin/gear/{id}/image/approve
+func (api *AdminAPI) approveGearImage(w http.ResponseWriter, r *http.Request, id string) {
+	userID := auth.GetUserID(r.Context())
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	if err := api.catalogStore.ApproveImage(ctx, id, userID); err != nil {
+		if errors.Is(err, database.ErrCatalogItemNotFound) {
+			api.writeJSON(w, http.StatusNotFound, map[string]string{
+				"error": "gear item not found",
+			})
+			return
+		}
+		if errors.Is(err, database.ErrCatalogImageMissing) {
+			api.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+				"error": "gear item has no image to approve",
+			})
+			return
+		}
+		api.logger.Error("Failed to approve gear image", logging.WithFields(map[string]interface{}{
+			"gearId": id,
+			"error":  err.Error(),
+		}))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to approve image",
+		})
+		return
+	}
+
+	api.logger.Info("Admin approved gear image",
+		logging.WithField("gearId", id),
+		logging.WithField("adminId", userID),
+	)
+
+	api.writeJSON(w, http.StatusOK, map[string]string{
+		"status":  string(models.ImageStatusApproved),
+		"message": "Image approved",
 	})
 }

@@ -35,6 +35,7 @@ export async function adminSearchGear(
   if (params.query) searchParams.set('query', params.query);
   if (params.gearType) searchParams.set('gearType', params.gearType);
   if (params.brand) searchParams.set('brand', params.brand);
+  if (params.status) searchParams.set('status', params.status);
   if (params.imageStatus) searchParams.set('imageStatus', params.imageStatus);
   if (params.limit) searchParams.set('limit', params.limit.toString());
   if (params.offset) searchParams.set('offset', params.offset.toString());
@@ -162,6 +163,35 @@ export async function adminUploadGearImage(
       throw new Error(data.error || 'Invalid image');
     }
     throw new Error(data.error || 'Failed to upload image');
+  }
+}
+
+// Approve an existing scanned image for a gear item (admin only)
+export async function adminApproveGearImage(id: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/gear/${id}/image/approve`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or gear-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Gear item not found');
+    }
+    if (response.status === 422) {
+      throw new Error(data.error || 'No image available to approve');
+    }
+    throw new Error(data.error || 'Failed to approve image');
   }
 }
 
