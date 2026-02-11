@@ -42,7 +42,7 @@ const mockItem: GearCatalogItem = {
   msrp: 19.99,
   source: 'admin',
   createdByUserId: 'admin-1',
-  status: 'active',
+  status: 'published',
   canonicalKey: 'motor-emax-eco-ii-2207',
   imageUrl: undefined,
   description: 'Great all-around motor',

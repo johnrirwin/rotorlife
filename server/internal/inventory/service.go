@@ -61,6 +61,10 @@ func (s *Service) AddItem(ctx context.Context, userID string, params models.AddI
 			s.logger.Error("Failed to add/increment inventory item", logging.WithField("error", err.Error()))
 			return nil, err
 		}
+		enriched, err := s.store.Get(ctx, item.ID, userID)
+		if err == nil && enriched != nil {
+			item = enriched
+		}
 
 		s.logger.Info("Added/incremented inventory item", logging.WithFields(map[string]interface{}{
 			"id":       item.ID,
@@ -79,6 +83,10 @@ func (s *Service) AddItem(ctx context.Context, userID string, params models.AddI
 	if err != nil {
 		s.logger.Error("Failed to add inventory item", logging.WithField("error", err.Error()))
 		return nil, err
+	}
+	enriched, err := s.store.Get(ctx, item.ID, userID)
+	if err == nil && enriched != nil {
+		item = enriched
 	}
 
 	s.logger.Info("Added inventory item", logging.WithField("id", item.ID))

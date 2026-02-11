@@ -20,6 +20,8 @@ type GearCatalogStore struct {
 }
 
 var ErrCatalogItemNotFound = errors.New("catalog item not found")
+var ErrCatalogImageAlreadyCurated = errors.New("catalog image already curated")
+var ErrCatalogImageMissing = errors.New("catalog image missing")
 
 // NewGearCatalogStore creates a new gear catalog store
 func NewGearCatalogStore(db *DB) *GearCatalogStore {
@@ -69,7 +71,7 @@ func (s *GearCatalogStore) Create(ctx context.Context, userID string, params mod
 		MSRP:              params.MSRP,
 		Source:            models.CatalogSourceUserSubmitted,
 		CreatedByUserID:   userID,
-		Status:            models.CatalogStatusActive,
+		Status:            models.CatalogStatusPending,
 		CanonicalKey:      canonicalKey,
 		Description:       params.Description,
 		ImageStatus:       models.ImageStatusMissing,
@@ -246,7 +248,7 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	}
 
 	// Build WHERE clauses
-	whereClauses := []string{"status = 'active'"}
+	whereClauses := []string{"status = 'published'"}
 	args := []interface{}{}
 	argIdx := 1
 
@@ -263,9 +265,13 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	}
 
 	if params.Status != "" {
-		// Override the default status filter
+		normalizedStatus := models.NormalizeCatalogStatus(params.Status)
+		if !models.IsValidCatalogStatus(normalizedStatus) {
+			return nil, fmt.Errorf("invalid catalog status %q", params.Status)
+		}
+		// Override the default published-only status filter
 		whereClauses[0] = fmt.Sprintf("status = $%d", argIdx)
-		args = append(args, params.Status)
+		args = append(args, normalizedStatus)
 		argIdx++
 	}
 
@@ -398,7 +404,7 @@ func (s *GearCatalogStore) FindNearMatches(ctx context.Context, gearType models.
 			   COALESCE(similarity(LOWER(brand || ' ' || model), LOWER($2 || ' ' || $3)), 0) as sim_score
 		FROM gear_catalog
 		WHERE gear_type = $1
-		  AND status = 'active'
+		  AND status = 'published'
 		  AND (
 			COALESCE(similarity(LOWER(brand || ' ' || model), LOWER($2 || ' ' || $3)), 0) >= $4
 			OR LOWER(brand) = LOWER($2)
@@ -458,7 +464,7 @@ func (s *GearCatalogStore) findNearMatchesFallback(ctx context.Context, gearType
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
 		FROM gear_catalog
 		WHERE gear_type = $1
-		  AND status = 'active'
+		  AND status = 'published'
 		  AND (
 			LOWER(brand) = LOWER($2)
 			OR LOWER(model) LIKE LOWER('%' || $3 || '%')
@@ -546,7 +552,7 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
 			   COALESCE(description_status, 'missing'), description_curated_by_user_id, description_curated_at
 		FROM gear_catalog
-		WHERE status = 'active'
+		WHERE status = 'published'
 		  AND ($1 = '' OR gear_type = $1)
 		ORDER BY usage_count DESC, brand, model
 		LIMIT $2
@@ -644,7 +650,7 @@ func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryIt
 		catalogID = uuid.New().String()
 		insertQuery := `
 			INSERT INTO gear_catalog (id, gear_type, brand, model, variant, specs, source, created_by_user_id, status, canonical_key, image_status, description_status, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, 'user', $7, 'active', $8, 'missing', 'missing', NOW(), NOW())
+			VALUES ($1, $2, $3, $4, $5, $6, 'user', $7, 'pending', $8, 'missing', 'missing', NOW(), NOW())
 		`
 		_, err = tx.ExecContext(ctx, insertQuery, catalogID, gearType, brand, model, variant, specs, userID, canonicalKey)
 		if err != nil {
@@ -697,6 +703,16 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 		argIdx++
 	}
 
+	if params.Status != "" {
+		normalizedStatus := models.NormalizeCatalogStatus(params.Status)
+		if !models.IsValidCatalogStatus(normalizedStatus) {
+			return nil, fmt.Errorf("invalid catalog status %q", params.Status)
+		}
+		whereClauses = append(whereClauses, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, normalizedStatus)
+		argIdx++
+	}
+
 	if params.ImageStatus != "" {
 		switch params.ImageStatus {
 		case models.ImageStatusRecentlyCurated:
@@ -710,9 +726,11 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 			argIdx++
 		}
 	} else {
-		// Default "Needs Work" view: items missing image OR description
-		// An item is complete when both image_status='approved' AND description_status='approved'
-		whereClauses = append(whereClauses, "(COALESCE(image_status, 'missing') = 'missing' OR COALESCE(description_status, 'missing') = 'missing')")
+		// Default "Needs Work" view:
+		// - items missing an image,
+		// - items with a scanned (not-yet-curated) image,
+		// - or items missing a description.
+		whereClauses = append(whereClauses, "(COALESCE(image_status, 'missing') IN ('missing', 'scanned') OR COALESCE(description_status, 'missing') = 'missing')")
 	}
 
 	// Text search
@@ -916,6 +934,77 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 		args = append(args, pq.Array(params.BestFor))
 		argIdx++
 	}
+	if params.Status != nil {
+		sets = append(sets, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, *params.Status)
+		argIdx++
+
+		// Publishing a catalog item should also finalize any scanned image curation.
+		// This keeps status and image curation state in sync for admin moderation UX.
+		if *params.Status == models.CatalogStatusPublished && params.ImageStatus == nil {
+			// If this row currently has a scanned image, promote it to approved and record curator metadata.
+			sets = append(sets, fmt.Sprintf(`
+				image_status = CASE
+					WHEN COALESCE(image_status, 'missing') = $%d
+					     AND (
+					       image_asset_id IS NOT NULL
+					       OR image_data IS NOT NULL
+					       OR (image_url IS NOT NULL AND image_url != '')
+					     )
+					THEN $%d
+					ELSE COALESCE(image_status, 'missing')
+				END
+			`, argIdx, argIdx+1))
+			args = append(args, models.ImageStatusScanned, models.ImageStatusApproved)
+			argIdx += 2
+
+			sets = append(sets, fmt.Sprintf(`
+				image_curated_by_user_id = CASE
+					WHEN COALESCE(image_status, 'missing') = $%d
+					     AND (
+					       image_asset_id IS NOT NULL
+					       OR image_data IS NOT NULL
+					       OR (image_url IS NOT NULL AND image_url != '')
+					     )
+					THEN $%d
+					ELSE image_curated_by_user_id
+				END
+			`, argIdx, argIdx+1))
+			args = append(args, models.ImageStatusScanned, adminUserID)
+			argIdx += 2
+
+			sets = append(sets, fmt.Sprintf(`
+				image_curated_at = CASE
+					WHEN COALESCE(image_status, 'missing') = $%d
+					     AND (
+					       image_asset_id IS NOT NULL
+					       OR image_data IS NOT NULL
+					       OR (image_url IS NOT NULL AND image_url != '')
+					     )
+					THEN NOW()
+					ELSE image_curated_at
+				END
+			`, argIdx))
+			args = append(args, models.ImageStatusScanned)
+			argIdx++
+		}
+	}
+	if params.ImageStatus != nil {
+		sets = append(sets, fmt.Sprintf("image_status = $%d", argIdx))
+		args = append(args, *params.ImageStatus)
+		argIdx++
+
+		switch *params.ImageStatus {
+		case models.ImageStatusApproved:
+			sets = append(sets, fmt.Sprintf("image_curated_by_user_id = $%d", argIdx))
+			args = append(args, adminUserID)
+			argIdx++
+			sets = append(sets, "image_curated_at = NOW()")
+		case models.ImageStatusScanned, models.ImageStatusMissing:
+			sets = append(sets, "image_curated_by_user_id = NULL")
+			sets = append(sets, "image_curated_at = NULL")
+		}
+	}
 	if params.ImageURL != nil {
 		sets = append(sets, fmt.Sprintf("image_url = $%d", argIdx))
 		args = append(args, *params.ImageURL)
@@ -1002,6 +1091,121 @@ func (s *GearCatalogStore) SetImage(ctx context.Context, id string, adminUserID 
 		return previousAssetID.String, nil
 	}
 	return "", nil
+}
+
+// SetUserSubmittedImage stores a moderated user-submitted image for a catalog item.
+// This marks image_status as "scanned" so it remains in the admin moderation queue.
+// Returns previous image asset ID for cleanup.
+func (s *GearCatalogStore) SetUserSubmittedImage(ctx context.Context, id string, imageType string, imageAssetID string) (string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to begin transaction for user-submitted gear image: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var (
+		previousAssetID sql.NullString
+		imageStatus     models.ImageStatus
+	)
+
+	// Lock the row to avoid TOCTOU races with concurrent admin curation.
+	if err := tx.QueryRowContext(ctx, `
+		SELECT image_asset_id, COALESCE(image_status, 'missing')
+		FROM gear_catalog
+		WHERE id = $1
+		FOR UPDATE
+	`, id).Scan(&previousAssetID, &imageStatus); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("%w: %s", ErrCatalogItemNotFound, id)
+		}
+		return "", fmt.Errorf("failed to fetch existing gear image reference: %w", err)
+	}
+
+	if imageStatus == models.ImageStatusApproved {
+		return "", ErrCatalogImageAlreadyCurated
+	}
+
+	query := `
+		UPDATE gear_catalog
+		SET image_asset_id = $1,
+		    image_data = NULL,
+		    image_type = $2,
+		    image_url = NULL,
+		    image_status = $3,
+		    image_curated_by_user_id = NULL,
+		    image_curated_at = NULL,
+		    updated_at = NOW()
+		WHERE id = $4
+	`
+	result, err := tx.ExecContext(ctx, query, imageAssetID, imageType, models.ImageStatusScanned, id)
+	if err != nil {
+		return "", fmt.Errorf("failed to set user-submitted gear image: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return "", fmt.Errorf("%w: %s", ErrCatalogItemNotFound, id)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("failed to commit user-submitted gear image update: %w", err)
+	}
+
+	if previousAssetID.Valid {
+		return previousAssetID.String, nil
+	}
+	return "", nil
+}
+
+// ApproveImage marks an existing catalog image as approved by an admin.
+func (s *GearCatalogStore) ApproveImage(ctx context.Context, id string, adminUserID string) error {
+	var (
+		imageStatus models.ImageStatus
+		hasImage    bool
+	)
+
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(image_status, 'missing'),
+		       (
+		         (image_asset_id IS NOT NULL)
+		         OR (image_data IS NOT NULL)
+		         OR (image_url IS NOT NULL AND image_url != '')
+		       ) AS has_image
+		FROM gear_catalog
+		WHERE id = $1
+	`, id).Scan(&imageStatus, &hasImage); err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("%w: %s", ErrCatalogItemNotFound, id)
+		}
+		return fmt.Errorf("failed to fetch gear image status: %w", err)
+	}
+
+	if !hasImage {
+		return ErrCatalogImageMissing
+	}
+	if imageStatus == models.ImageStatusApproved {
+		return nil
+	}
+
+	query := `
+		UPDATE gear_catalog
+		SET image_status = $1,
+		    image_curated_by_user_id = $2,
+		    image_curated_at = NOW(),
+		    updated_at = NOW()
+		WHERE id = $3
+	`
+	result, err := s.db.ExecContext(ctx, query, models.ImageStatusApproved, adminUserID, id)
+	if err != nil {
+		return fmt.Errorf("failed to approve gear image: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("%w: %s", ErrCatalogItemNotFound, id)
+	}
+
+	return nil
 }
 
 // GetImage retrieves the binary image data for a gear catalog item

@@ -114,17 +114,46 @@ func (gt GearType) ToEquipmentCategory() EquipmentCategory {
 type CatalogItemStatus string
 
 const (
-	CatalogStatusActive   CatalogItemStatus = "active"
-	CatalogStatusPending  CatalogItemStatus = "pending"
-	CatalogStatusFlagged  CatalogItemStatus = "flagged"
-	CatalogStatusRejected CatalogItemStatus = "rejected"
+	CatalogStatusPublished CatalogItemStatus = "published"
+	CatalogStatusPending   CatalogItemStatus = "pending"
+	CatalogStatusRemoved   CatalogItemStatus = "removed"
+
+	// Backward-compatible aliases for legacy values still present in old data/clients.
+	CatalogStatusActive   CatalogItemStatus = CatalogStatusPublished
+	CatalogStatusFlagged  CatalogItemStatus = CatalogStatusRemoved
+	CatalogStatusRejected CatalogItemStatus = CatalogStatusRemoved
 )
+
+// NormalizeCatalogStatus maps legacy status values to current canonical values.
+func NormalizeCatalogStatus(status CatalogItemStatus) CatalogItemStatus {
+	switch strings.ToLower(strings.TrimSpace(string(status))) {
+	case "active", "published":
+		return CatalogStatusPublished
+	case "pending":
+		return CatalogStatusPending
+	case "flagged", "rejected", "removed":
+		return CatalogStatusRemoved
+	default:
+		return status
+	}
+}
+
+// IsValidCatalogStatus reports whether status is one of the supported catalog states.
+func IsValidCatalogStatus(status CatalogItemStatus) bool {
+	switch NormalizeCatalogStatus(status) {
+	case CatalogStatusPublished, CatalogStatusPending, CatalogStatusRemoved:
+		return true
+	default:
+		return false
+	}
+}
 
 // ImageStatus represents the curation status of a gear item's image
 type ImageStatus string
 
 const (
 	ImageStatusMissing  ImageStatus = "missing"
+	ImageStatusScanned  ImageStatus = "scanned"
 	ImageStatusApproved ImageStatus = "approved"
 	// ImageStatusRecentlyCurated is a special filter value (not stored in DB)
 	// Used by admin to find items curated within last 24 hours
@@ -199,24 +228,27 @@ type CreateGearCatalogParams struct {
 
 // AdminUpdateGearCatalogParams represents admin-only update parameters
 type AdminUpdateGearCatalogParams struct {
-	Brand       *string  `json:"brand,omitempty"`
-	Model       *string  `json:"model,omitempty"`
-	Variant     *string  `json:"variant,omitempty"`
-	Description *string  `json:"description,omitempty"`
-	MSRP        *float64 `json:"msrp,omitempty"`
-	ClearMSRP   bool     `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
-	ImageURL    *string  `json:"imageUrl,omitempty"`  // Admin can set image URL
-	BestFor     []string `json:"bestFor,omitempty"`   // Drone types this gear is best suited for
+	Brand       *string            `json:"brand,omitempty"`
+	Model       *string            `json:"model,omitempty"`
+	Variant     *string            `json:"variant,omitempty"`
+	Description *string            `json:"description,omitempty"`
+	MSRP        *float64           `json:"msrp,omitempty"`
+	ClearMSRP   bool               `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
+	ImageURL    *string            `json:"imageUrl,omitempty"`  // Admin can set image URL
+	ImageStatus *ImageStatus       `json:"imageStatus,omitempty"`
+	BestFor     []string           `json:"bestFor,omitempty"` // Drone types this gear is best suited for
+	Status      *CatalogItemStatus `json:"status,omitempty"`
 }
 
 // AdminGearSearchParams represents admin search parameters with curation filters
 type AdminGearSearchParams struct {
-	Query       string      `json:"query,omitempty"`
-	GearType    GearType    `json:"gearType,omitempty"`
-	Brand       string      `json:"brand,omitempty"`
-	ImageStatus ImageStatus `json:"imageStatus,omitempty"` // Filter by image status
-	Limit       int         `json:"limit,omitempty"`
-	Offset      int         `json:"offset,omitempty"`
+	Query       string            `json:"query,omitempty"`
+	GearType    GearType          `json:"gearType,omitempty"`
+	Brand       string            `json:"brand,omitempty"`
+	Status      CatalogItemStatus `json:"status,omitempty"`      // Filter by overall catalog status
+	ImageStatus ImageStatus       `json:"imageStatus,omitempty"` // Filter by image status
+	Limit       int               `json:"limit,omitempty"`
+	Offset      int               `json:"offset,omitempty"`
 }
 
 // GearCatalogSearchParams represents search parameters for the catalog

@@ -151,7 +151,8 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 			   i.product_url, 
 			   COALESCE(i.image_url, 
 			       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
-			            WHEN gc.image_data IS NOT NULL THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
+			            WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned') AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
+			                 THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
 			            ELSE NULL END
 			   ) as image_url,
 			   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
@@ -169,7 +170,8 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 				   i.product_url, 
 				   COALESCE(i.image_url, 
 				       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
-				            WHEN gc.image_data IS NOT NULL THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
+				            WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned') AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
+				                 THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
 				            ELSE NULL END
 				   ) as image_url,
 				   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
@@ -277,7 +279,8 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 			   i.product_url, 
 			   COALESCE(i.image_url, 
 			       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
-			            WHEN gc.image_data IS NOT NULL THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
+			            WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned') AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
+			                 THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
 			            ELSE NULL END
 			   ) as image_url,
 			   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
@@ -529,7 +532,8 @@ func (s *InventoryStore) GetByCatalogID(ctx context.Context, userID, catalogID s
 			   i.product_url, 
 			   COALESCE(i.image_url, 
 			       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
-			            WHEN gc.image_data IS NOT NULL THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
+			            WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned') AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
+			                 THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
 			            ELSE NULL END
 			   ) as image_url,
 			   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at

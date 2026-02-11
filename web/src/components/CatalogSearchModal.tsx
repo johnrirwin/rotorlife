@@ -3,6 +3,14 @@ import type { GearCatalogItem, GearType, CreateGearCatalogParams, DroneType } fr
 import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 import { searchGearCatalog, createGearCatalogItem, findNearMatches, getPopularGear } from '../gearCatalogApi';
 
+type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
+
+interface ModerationResult {
+  status: ModerationStatus;
+  reason?: string;
+  uploadId?: string;
+}
+
 interface CatalogSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -10,6 +18,8 @@ interface CatalogSearchModalProps {
   initialGearType?: GearType;
   startInCreateMode?: boolean;
   onUploadCatalogImage?: (itemId: string, imageFile: File) => Promise<void>;
+  onModerateCatalogImage?: (imageFile: File) => Promise<ModerationResult>;
+  onSaveCatalogImageUpload?: (itemId: string, uploadId: string) => Promise<void>;
 }
 
 export function CatalogSearchModal({
@@ -19,6 +29,8 @@ export function CatalogSearchModal({
   initialGearType,
   startInCreateMode = false,
   onUploadCatalogImage,
+  onModerateCatalogImage,
+  onSaveCatalogImageUpload,
 }: CatalogSearchModalProps) {
   const [query, setQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>(initialGearType || '');
@@ -148,6 +160,8 @@ export function CatalogSearchModal({
             onSuccess={handleSelectItem}
             onCancel={() => setShowCreateForm(false)}
             onUploadCatalogImage={onUploadCatalogImage}
+            onModerateCatalogImage={onModerateCatalogImage}
+            onSaveCatalogImageUpload={onSaveCatalogImageUpload}
           />
         ) : (
           <>
@@ -346,6 +360,8 @@ interface CreateCatalogItemFormProps {
   onSuccess: (item: GearCatalogItem) => void;
   onCancel: () => void;
   onUploadCatalogImage?: (itemId: string, imageFile: File) => Promise<void>;
+  onModerateCatalogImage?: (imageFile: File) => Promise<ModerationResult>;
+  onSaveCatalogImageUpload?: (itemId: string, uploadId: string) => Promise<void>;
 }
 
 function CreateCatalogItemForm({
@@ -354,14 +370,36 @@ function CreateCatalogItemForm({
   onSuccess,
   onCancel,
   onUploadCatalogImage,
+  onModerateCatalogImage,
+  onSaveCatalogImageUpload,
 }: CreateCatalogItemFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nearMatches, setNearMatches] = useState<GearCatalogItem[]>([]);
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [isImageUploading, setIsImageUploading] = useState(false);
+  const [imageStatusText, setImageStatusText] = useState<string | null>(null);
+  const [imageStatusTone, setImageStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  type SelectedCatalogImage = {
+    file?: File;
+    previewUrl: string;
+    uploadId?: string;
+    moderationStatus?: ModerationStatus;
+    moderationReason?: string;
+  };
+
+  const [selectedImage, setSelectedImage] = useState<SelectedCatalogImage | null>(null);
+  const [modalImage, setModalImage] = useState<SelectedCatalogImage | null>(null);
+  const usesModerationFlow = !!onModerateCatalogImage && !!onSaveCatalogImageUpload;
+
+  const revokePreviewUrl = (url?: string) => {
+    if (typeof url === 'string' && url.startsWith('blob:')) {
+      URL.revokeObjectURL(url);
+    }
+  };
 
   // Parse initial query into brand/model if possible
   const parseInitialQuery = () => {
@@ -383,47 +421,161 @@ function CreateCatalogItemForm({
   const [msrp, setMsrp] = useState('');
   const [description, setDescription] = useState('');
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const clearSelectedImage = () => {
-      setImageFile(null);
-      setImagePreview(null);
-    };
+  const selectedImageRef = useRef<SelectedCatalogImage | null>(null);
+  const modalImageRef = useRef<SelectedCatalogImage | null>(null);
 
+  useEffect(() => {
+    selectedImageRef.current = selectedImage;
+  }, [selectedImage]);
+
+  useEffect(() => {
+    modalImageRef.current = modalImage;
+  }, [modalImage]);
+
+  useEffect(() => {
+    return () => {
+      const previewUrls = new Set<string>();
+      if (selectedImageRef.current?.previewUrl) previewUrls.add(selectedImageRef.current.previewUrl);
+      if (modalImageRef.current?.previewUrl) previewUrls.add(modalImageRef.current.previewUrl);
+      previewUrls.forEach((url) => revokePreviewUrl(url));
+    };
+  }, []);
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {
-      clearSelectedImage();
       return;
     }
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
 
-    // Keep validation aligned with admin catalog image endpoint.
+    // Keep validation aligned with gear catalog image endpoint.
     if (file.size > 1024 * 1024) {
-      clearSelectedImage();
       setError('Image file is too large. Maximum size is 1MB.');
-      e.target.value = '';
       return;
     }
 
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      clearSelectedImage();
       setError('Invalid image type. Please use JPEG, PNG, or WebP.');
-      e.target.value = '';
       return;
     }
 
     setError(null);
-    setImageFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    if (modalImage?.previewUrl && modalImage.previewUrl !== selectedImage?.previewUrl) {
+      revokePreviewUrl(modalImage.previewUrl);
+    }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setImagePreview(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    if (!usesModerationFlow || !onModerateCatalogImage) {
+      setModalImage({ file, previewUrl });
+      setImageStatusText(null);
+      setImageStatusTone('neutral');
+      return;
+    }
+
+    setModalImage({ previewUrl, moderationStatus: 'PENDING_REVIEW' });
+    setIsImageUploading(true);
+    setImageStatusTone('neutral');
+    setImageStatusText('Uploading image…');
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      setImageStatusText('Checking image for safety…');
+
+      const moderation = await onModerateCatalogImage(file);
+      if (moderation.status === 'APPROVED' && moderation.uploadId) {
+        setModalImage({
+          previewUrl,
+          uploadId: moderation.uploadId,
+          moderationStatus: moderation.status,
+          moderationReason: moderation.reason,
+        });
+        setImageStatusTone('success');
+        setImageStatusText('Approved');
+      } else if (moderation.status === 'REJECTED') {
+        setModalImage({
+          previewUrl,
+          moderationStatus: moderation.status,
+          moderationReason: moderation.reason,
+        });
+        setImageStatusTone('error');
+        setImageStatusText('Not allowed');
+      } else {
+        setModalImage({
+          previewUrl,
+          moderationStatus: moderation.status,
+          moderationReason: moderation.reason,
+        });
+        setImageStatusTone('error');
+        setImageStatusText('Unable to verify right now');
+      }
+    } catch (err) {
+      setModalImage({
+        previewUrl,
+        moderationStatus: 'PENDING_REVIEW',
+      });
+      setImageStatusTone('error');
+      setImageStatusText('Unable to verify right now');
+      setError(err instanceof Error ? err.message : 'Unable to verify image right now');
+    } finally {
+      setIsImageUploading(false);
+    }
+  };
+
+  const handleOpenImageModal = () => {
+    setShowImageModal(true);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
+    if (selectedImage) {
+      setModalImage({ ...selectedImage });
+    } else {
+      setModalImage(null);
+    }
+  };
+
+  const handleCloseImageModal = () => {
+    setShowImageModal(false);
+    if (modalImage?.previewUrl && modalImage.previewUrl !== selectedImage?.previewUrl) {
+      revokePreviewUrl(modalImage.previewUrl);
+    }
+    setModalImage(null);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
+    setIsImageUploading(false);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveImageSelection = () => {
+    if (!modalImage) return;
+    if (usesModerationFlow && (!modalImage.uploadId || modalImage.moderationStatus !== 'APPROVED')) {
+      return;
+    }
+    if (selectedImage?.previewUrl && selectedImage.previewUrl !== modalImage.previewUrl) {
+      revokePreviewUrl(selectedImage.previewUrl);
+    }
+    setSelectedImage(modalImage);
+    setShowImageModal(false);
+    setModalImage(null);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
   };
 
   const handleRemoveImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
+    if (selectedImage?.previewUrl) {
+      revokePreviewUrl(selectedImage.previewUrl);
+    }
+    if (modalImage?.previewUrl && modalImage.previewUrl !== selectedImage?.previewUrl) {
+      revokePreviewUrl(modalImage.previewUrl);
+    }
+    setSelectedImage(null);
+    setModalImage(null);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
+    setError(null);
     if (imageInputRef.current) {
       imageInputRef.current.value = '';
     }
@@ -476,8 +628,14 @@ function CreateCatalogItemForm({
 
       const response = await createGearCatalogItem(params);
 
-      if (onUploadCatalogImage && imageFile) {
-        await onUploadCatalogImage(response.item.id, imageFile);
+      if (selectedImage) {
+        if (usesModerationFlow) {
+          if (selectedImage.uploadId && onSaveCatalogImageUpload) {
+            await onSaveCatalogImageUpload(response.item.id, selectedImage.uploadId);
+          }
+        } else if (onUploadCatalogImage && selectedImage.file) {
+          await onUploadCatalogImage(response.item.id, selectedImage.file);
+        }
       }
       
       if (response.existing) {
@@ -655,43 +813,54 @@ function CreateCatalogItemForm({
           />
         </div>
 
-        {/* Catalog image upload (admin flow only) */}
-        {onUploadCatalogImage && (
+        {/* Catalog image upload */}
+        {(onUploadCatalogImage || usesModerationFlow) && (
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               Catalog Image (optional)
               <span className="ml-2 text-xs text-primary-400">(Max 1MB, JPEG/PNG/WebP)</span>
             </label>
 
-            {imagePreview && (
-              <div className="mb-3 relative inline-block">
-                <img
-                  src={imagePreview}
-                  alt="Catalog image preview"
-                  className="w-32 h-32 object-cover rounded-lg bg-slate-700"
-                />
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  className="absolute -top-2 -right-2 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
-                  title="Remove image"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                onClick={handleOpenImageModal}
+                className="px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors"
+              >
+                {selectedImage ? 'Choose Different' : 'Add Image'}
+              </button>
+
+              {selectedImage && (
+                <div className="relative">
+                  <img
+                    src={selectedImage.previewUrl}
+                    alt="Catalog image preview"
+                    className="w-20 h-20 object-cover rounded-lg bg-slate-700"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="absolute -top-2 -right-2 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
+                    title="Remove image"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {usesModerationFlow && selectedImage && (
+              <p className="mt-2 text-xs text-slate-400">
+                {selectedImage.uploadId ? 'Approved image ready to save.' : 'Image is not approved yet.'}
+              </p>
             )}
 
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handleImageFileChange}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-600 file:text-white hover:file:bg-primary-700 file:cursor-pointer cursor-pointer"
-            />
-            <p className="text-xs text-slate-500 mt-1">
-              This uploads to the shared catalog item image, not personal inventory.
+            <p className="text-xs text-slate-500 mt-2">
+              {usesModerationFlow
+                ? 'Image moderation runs in the modal before this can be saved.'
+                : 'This uploads to the shared catalog item image and stays in admin review.'}
             </p>
           </div>
         )}
@@ -721,6 +890,93 @@ function CreateCatalogItemForm({
           Add to Catalog
         </button>
       </div>
+
+      {showImageModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Edit Gear Image</h3>
+              <button
+                type="button"
+                onClick={handleCloseImageModal}
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center gap-4 mb-4">
+              <div className="w-36 h-36 rounded-lg overflow-hidden border-2 border-slate-600 bg-slate-700">
+                {modalImage?.previewUrl ? (
+                  <img src={modalImage.previewUrl} alt="Gear preview" className="w-full h-full object-cover" />
+                ) : selectedImage?.previewUrl ? (
+                  <img src={selectedImage.previewUrl} alt="Current gear image" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-500 text-4xl">📦</div>
+                )}
+              </div>
+
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleImageFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={isImageUploading}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                {modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
+              </button>
+              <p className="text-xs text-slate-500">JPEG, PNG, or WebP. Max 1MB.</p>
+            </div>
+
+            {usesModerationFlow && imageStatusText && (
+              <div
+                className={`mb-4 p-3 rounded-lg text-sm border ${
+                  imageStatusTone === 'success'
+                    ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                    : imageStatusTone === 'error'
+                      ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                      : 'bg-slate-700/50 border-slate-600 text-slate-300'
+                }`}
+              >
+                <p>{imageStatusText}</p>
+                {modalImage?.moderationReason && imageStatusTone !== 'success' && (
+                  <p className="mt-1 text-xs text-slate-300">{modalImage.moderationReason}</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleCloseImageModal}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveImageSelection}
+                disabled={
+                  isImageUploading ||
+                  !modalImage ||
+                  (usesModerationFlow && (!modalImage.uploadId || modalImage.moderationStatus !== 'APPROVED'))
+                }
+                className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

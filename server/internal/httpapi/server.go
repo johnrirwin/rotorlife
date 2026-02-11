@@ -131,7 +131,7 @@ func (s *Server) Start(addr string) error {
 
 	// Gear Catalog routes (crowd-sourced gear definitions)
 	if s.gearCatalogStore != nil && s.authMiddleware != nil {
-		gearCatalogAPI := NewGearCatalogAPI(s.gearCatalogStore, s.authMiddleware, s.logger)
+		gearCatalogAPI := NewGearCatalogAPI(s.gearCatalogStore, s.imageSvc, s.authMiddleware, s.logger)
 		gearCatalogAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 

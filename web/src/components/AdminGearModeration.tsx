@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent, type ChangeEvent } from 'react';
-import type { GearCatalogItem, GearType, ImageStatusFilter, AdminUpdateGearCatalogParams, DroneType } from '../gearCatalogTypes';
+import type { GearCatalogItem, GearType, ImageStatusFilter, AdminUpdateGearCatalogParams, DroneType, CatalogItemStatus } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES } from '../gearCatalogTypes';
 import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminDeleteGear, adminGetGear, getAdminGearImageUrl } from '../adminApi';
 import { CatalogSearchModal } from './CatalogSearchModal';
@@ -24,6 +24,78 @@ function formatDateTime(value?: string): string {
   return date.toLocaleString();
 }
 
+function getImageStatusLabel(status: GearCatalogItem['imageStatus']): string {
+  switch (status) {
+    case 'approved':
+      return 'Approved';
+    case 'scanned':
+      return 'Scanned';
+    default:
+      return 'Missing';
+  }
+}
+
+function getImageStatusClass(status: GearCatalogItem['imageStatus']): string {
+  switch (status) {
+    case 'approved':
+      return 'bg-green-500/20 text-green-400';
+    case 'scanned':
+      return 'bg-blue-500/20 text-blue-400';
+    default:
+      return 'bg-yellow-500/20 text-yellow-400';
+  }
+}
+
+function getImageStatusTextClass(status: GearCatalogItem['imageStatus']): string {
+  switch (status) {
+    case 'approved':
+      return 'text-green-400';
+    case 'scanned':
+      return 'text-blue-400';
+    default:
+      return 'text-yellow-400';
+  }
+}
+
+function getCatalogStatusLabel(status: CatalogItemStatus): string {
+  switch (status) {
+    case 'published':
+      return 'Published';
+    case 'pending':
+      return 'Pending';
+    case 'removed':
+      return 'Removed';
+    default:
+      return status;
+  }
+}
+
+function getCatalogStatusClass(status: CatalogItemStatus): string {
+  switch (status) {
+    case 'published':
+      return 'bg-green-500/20 text-green-400';
+    case 'pending':
+      return 'bg-amber-500/20 text-amber-300';
+    case 'removed':
+      return 'bg-red-500/20 text-red-400';
+    default:
+      return 'bg-slate-500/20 text-slate-300';
+  }
+}
+
+function getCatalogStatusTextClass(status: CatalogItemStatus): string {
+  switch (status) {
+    case 'published':
+      return 'text-green-400';
+    case 'pending':
+      return 'text-amber-300';
+    case 'removed':
+      return 'text-red-400';
+    default:
+      return 'text-slate-300';
+  }
+}
+
 export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGearModerationProps) {
   const [items, setItems] = useState<GearCatalogItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -34,6 +106,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>('');
+  const [catalogStatus, setCatalogStatus] = useState<CatalogItemStatus | ''>('');
   const [imageStatus, setImageStatus] = useState<ImageStatusFilter | ''>(''); // Default to "Needs Work"
   const pageSize = 30;
   const [hasMore, setHasMore] = useState(true);
@@ -73,6 +146,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
       const response = await adminSearchGear({
         query: appliedQuery || undefined,
         gearType: gearType || undefined,
+        status: catalogStatus || undefined,
         imageStatus: imageStatus || undefined,
         limit: pageSize,
         offset: offset,
@@ -103,7 +177,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
         isLoadingRef.current = false;
       }
     }
-  }, [hasGearAdminAccess, appliedQuery, gearType, imageStatus]);
+  }, [hasGearAdminAccess, appliedQuery, gearType, catalogStatus, imageStatus]);
 
   // Initial load and auto-search when filters change
   useEffect(() => {
@@ -249,7 +323,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           <select
             value={gearType}
             onChange={(e) => setGearType(e.target.value as GearType | '')}
@@ -264,6 +338,17 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           </select>
 
           <select
+            value={catalogStatus}
+            onChange={(e) => setCatalogStatus(e.target.value as CatalogItemStatus | '')}
+            className="w-full min-w-0 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="published">Published</option>
+            <option value="removed">Removed</option>
+          </select>
+
+          <select
             value={imageStatus}
             onChange={(e) => setImageStatus(e.target.value as ImageStatusFilter | '')}
             className="w-full min-w-0 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -271,6 +356,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
             <option value="">Needs Work</option>
             <option value="all">All Records</option>
             <option value="missing">Needs Image</option>
+            <option value="scanned">Scanned (Needs Review)</option>
             <option value="approved">Has Image</option>
             <option value="recently-curated">Recently Updated (24h)</option>
           </select>
@@ -356,6 +442,9 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
                   Image
                 </th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
@@ -400,15 +489,14 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
                       {item.variant || '—'}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      {item.imageStatus === 'approved' ? (
-                        <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
-                          Approved
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs">
-                          Missing
-                        </span>
-                      )}
+                      <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(item.imageStatus)}`}>
+                        {getImageStatusLabel(item.imageStatus)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
+                        {getCatalogStatusLabel(item.status)}
+                      </span>
                     </td>
                   </tr>
                 );
@@ -447,15 +535,12 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
                     <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
                       {item.gearType}
                     </span>
-                    {item.imageStatus === 'approved' ? (
-                      <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
-                        Has Image
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs">
-                        No Image
-                      </span>
-                    )}
+                    <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
+                      {getCatalogStatusLabel(item.status)}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(item.imageStatus)}`}>
+                      {getImageStatusLabel(item.imageStatus)}
+                    </span>
                   </div>
                   <h3 className="text-white font-medium truncate">
                     {item.brand} {item.model}
@@ -551,6 +636,8 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const [description, setDescription] = useState('');
   const [msrp, setMsrp] = useState('');
   const [bestFor, setBestFor] = useState<DroneType[]>([]);
+  const [status, setStatus] = useState<CatalogItemStatus>('pending');
+  const [selectedImageStatus, setSelectedImageStatus] = useState<GearCatalogItem['imageStatus']>('missing');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [deleteImage, setDeleteImage] = useState(false);
@@ -578,6 +665,8 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         setDescription(freshItem.description || '');
         setMsrp(freshItem.msrp?.toString() || '');
         setBestFor((freshItem.bestFor || []) as DroneType[]);
+        setStatus(freshItem.status);
+        setSelectedImageStatus(freshItem.imageStatus);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load item');
@@ -594,8 +683,21 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const [imageCacheBuster] = useState(() => Date.now());
   
   // Determine if item has an existing image (either URL or stored image)
-  const hasExistingImage = item ? (item.imageUrl || item.imageStatus === 'approved') : false;
-  const existingImageUrl = item ? (item.imageUrl || (item.imageStatus === 'approved' ? getAdminGearImageUrl(item.id, imageCacheBuster) : null)) : null;
+  const hasExistingImage = item ? (item.imageUrl || item.imageStatus === 'approved' || item.imageStatus === 'scanned') : false;
+  const existingImageUrl = item ? (item.imageUrl || ((item.imageStatus === 'approved' || item.imageStatus === 'scanned') ? getAdminGearImageUrl(item.id, imageCacheBuster) : null)) : null;
+  const willHaveImage = imageFile !== null || (!deleteImage && Boolean(hasExistingImage));
+
+  useEffect(() => {
+    setSelectedImageStatus((prevStatus) => {
+      if (!willHaveImage && prevStatus !== 'missing') {
+        return 'missing';
+      }
+      if (willHaveImage && prevStatus === 'missing') {
+        return 'scanned';
+      }
+      return prevStatus;
+    });
+  }, [willHaveImage]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -623,6 +725,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     setError(null);
     setDeleteImage(false);
     setImageFile(file);
+    setSelectedImageStatus('scanned');
     
     // Create preview
     const reader = new FileReader();
@@ -636,6 +739,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     setDeleteImage(true);
     setImageFile(null);
     setImagePreview(null);
+    setSelectedImageStatus('missing');
   };
 
   const closeDeleteConfirm = useCallback(() => {
@@ -730,6 +834,65 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     }
   };
 
+  const applyChanges = async (statusOverride?: CatalogItemStatus) => {
+    if (!item) return;
+
+    const params: AdminUpdateGearCatalogParams = {};
+
+    // Only include changed fields
+    if (brand !== item.brand) params.brand = brand;
+    if (model !== item.model) params.model = model;
+    if (variant !== (item.variant || '')) params.variant = variant;
+    if (description !== (item.description || '')) params.description = description;
+
+    // Check if bestFor has changed
+    const itemBestFor = (item.bestFor || []) as DroneType[];
+    const bestForChanged = bestFor.length !== itemBestFor.length ||
+      bestFor.some(t => !itemBestFor.includes(t));
+    if (bestForChanged) {
+      params.bestFor = bestFor;
+    }
+
+    if (msrp !== (item.msrp?.toString() || '')) {
+      if (msrp) {
+        params.msrp = parseFloat(msrp);
+      } else if (item.msrp != null) {
+        // Explicitly clear MSRP if it was previously set
+        params.clearMsrp = true;
+      }
+    }
+
+    if (statusOverride) {
+      if (item.status !== statusOverride) {
+        params.status = statusOverride;
+      }
+    } else if (item.status === 'pending' && status === item.status) {
+      // Default submit action from pending is to approve/publish.
+      params.status = 'published';
+    } else if (status !== item.status) {
+      params.status = status;
+    }
+
+    // Allow admins to explicitly set/unset image curation status, including "unapprove" to scanned.
+    if (selectedImageStatus !== item.imageStatus || imageFile !== null || deleteImage) {
+      params.imageStatus = selectedImageStatus;
+    }
+
+    // Handle image: upload new, delete existing, or no change
+    if (imageFile) {
+      // Upload new image
+      await adminUploadGearImage(item.id, imageFile);
+    } else if (deleteImage && hasExistingImage) {
+      // Delete existing image
+      await adminDeleteGearImage(item.id);
+    }
+
+    // Update other fields if changed
+    if (Object.keys(params).length > 0) {
+      await adminUpdateGear(item.id, params);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!item) return;
@@ -738,45 +901,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     setError(null);
 
     try {
-      const params: AdminUpdateGearCatalogParams = {};
-
-      // Only include changed fields
-      if (brand !== item.brand) params.brand = brand;
-      if (model !== item.model) params.model = model;
-      if (variant !== (item.variant || '')) params.variant = variant;
-      if (description !== (item.description || '')) params.description = description;
-      
-      // Check if bestFor has changed
-      const itemBestFor = (item.bestFor || []) as DroneType[];
-      const bestForChanged = bestFor.length !== itemBestFor.length || 
-        bestFor.some(t => !itemBestFor.includes(t));
-      if (bestForChanged) {
-        params.bestFor = bestFor;
-      }
-      
-      if (msrp !== (item.msrp?.toString() || '')) {
-        if (msrp) {
-          params.msrp = parseFloat(msrp);
-        } else if (item.msrp != null) {
-          // Explicitly clear MSRP if it was previously set
-          params.clearMsrp = true;
-        }
-      }
-      
-      // Handle image: upload new, delete existing, or no change
-      if (imageFile) {
-        // Upload new image
-        await adminUploadGearImage(item.id, imageFile);
-      } else if (deleteImage && hasExistingImage) {
-        // Delete existing image
-        await adminDeleteGearImage(item.id);
-      }
-      
-      // Update other fields if changed
-      if (Object.keys(params).length > 0) {
-        await adminUpdateGear(item.id, params);
-      }
-
+      await applyChanges();
       onSave(); // Signal that we're done, parent will refresh
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update gear item');
@@ -819,6 +944,18 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
       </div>
     );
   }
+
+  const saveButtonLabel = (() => {
+    if (item.status === 'pending' && status === item.status) {
+      return 'Approve';
+    }
+    if (status !== item.status) {
+      if (status === 'published') return 'Publish';
+      if (status === 'pending') return 'Move to Pending';
+      return 'Remove';
+    }
+    return 'Save Changes';
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -868,10 +1005,59 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               <strong>Last Edit:</strong> {formatDateTime(item.updatedAt)}
             </p>
             <p className="text-sm text-slate-400 mt-1">
+              <strong>Status:</strong>{' '}
+              <span className={getCatalogStatusTextClass(item.status)}>
+                {getCatalogStatusLabel(item.status)}
+              </span>
+            </p>
+            <p className="text-sm text-slate-400 mt-1">
               <strong>Image Status:</strong>{' '}
-              <span className={item.imageStatus === 'approved' ? 'text-green-400' : 'text-yellow-400'}>
+              <span className={getImageStatusTextClass(item.imageStatus)}>
                 {item.imageStatus}
               </span>
+            </p>
+          </div>
+
+          {/* Catalog status */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Catalog Status
+            </label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as CatalogItemStatus)}
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            >
+              <option value="pending">Pending</option>
+              <option value="published">Published</option>
+              <option value="removed">Removed</option>
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Only <span className="text-green-400">Published</span> items appear in the public catalog.
+            </p>
+          </div>
+
+          {/* Image moderation status */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Image Status
+            </label>
+            <select
+              value={selectedImageStatus}
+              onChange={(e) => setSelectedImageStatus(e.target.value as GearCatalogItem['imageStatus'])}
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            >
+              {willHaveImage ? (
+                <>
+                  <option value="scanned">Scanned (Needs Review)</option>
+                  <option value="approved">Approved</option>
+                </>
+              ) : (
+                <option value="missing">Missing</option>
+              )}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Set to <span className="text-blue-400">Scanned</span> to unapprove while keeping the image.
             </p>
           </div>
 
@@ -989,7 +1175,8 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
             
             {/* Show existing image or new preview */}
             {!deleteImage && (imagePreview || existingImageUrl) && (
-              <div className="mb-3 relative inline-block">
+              <div className="mb-3">
+                <div className="relative inline-block">
                 <img
                   src={imagePreview || existingImageUrl || ''}
                   alt="Preview"
@@ -1010,6 +1197,19 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                     </svg>
                   </button>
                 )}
+                </div>
+                {existingImageUrl && !imagePreview && (
+                  <a
+                    href={existingImageUrl}
+                    download={`${(item.brand || 'gear').replace(/\s+/g, '-').toLowerCase()}-${(item.model || 'image').replace(/\s+/g, '-').toLowerCase()}`}
+                    className="mt-2 inline-flex items-center gap-2 text-sm text-primary-300 hover:text-primary-200 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0l-4-4m4 4l4-4m-9 8h10" />
+                    </svg>
+                    Download current image
+                  </a>
+                )}
               </div>
             )}
             
@@ -1026,6 +1226,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                 Image will be removed when you save.
               </p>
             )}
+
           </div>
 
         </form>
@@ -1056,7 +1257,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Save Changes
+                {saveButtonLabel}
               </>
             )}
           </button>

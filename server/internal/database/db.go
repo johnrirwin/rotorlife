@@ -105,19 +105,22 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationAircraftTuningSnapshots,
 		migrationTuningSnapshotDiffBackup,
 		migrationDropPasswordHash,
-		migrationGearCatalog,               // Creates gear_catalog table
-		migrationPgTrgm,                    // Adds trigram search for gear_catalog
-		migrationInventoryCatalogLink,      // Adds FK to gear_catalog (depends on migrationGearCatalog)
-		migrationGearCatalogBestFor,        // Adds best_for column for drone type
-		migrationGearCatalogMSRP,           // Adds msrp column for price
-		migrationGearCatalogCuration,       // Adds image curation fields
-		migrationUserIsAdmin,               // Adds is_admin flag to users
-		migrationUserIsGearAdmin,           // Adds is_gear_admin flag to users
-		migrationGearCatalogImageData,      // Adds image_data binary storage for gear images
-		migrationInventoryCatalogUnique,    // Adds unique constraint on (user_id, catalog_id)
-		migrationDropInventoryPurchaseDate, // Drops unused purchase_date column
-		migrationDropInventoryCondition,    // Drops unused condition column
-		migrationImageAssets,               // Adds centralized image asset storage + references
+		migrationGearCatalog,                               // Creates gear_catalog table
+		migrationPgTrgm,                                    // Adds trigram search for gear_catalog
+		migrationInventoryCatalogLink,                      // Adds FK to gear_catalog (depends on migrationGearCatalog)
+		migrationGearCatalogBestFor,                        // Adds best_for column for drone type
+		migrationGearCatalogMSRP,                           // Adds msrp column for price
+		migrationGearCatalogCuration,                       // Adds image curation fields
+		migrationUserIsAdmin,                               // Adds is_admin flag to users
+		migrationUserIsGearAdmin,                           // Adds is_gear_admin flag to users
+		migrationGearCatalogImageData,                      // Adds image_data binary storage for gear images
+		migrationInventoryCatalogUnique,                    // Adds unique constraint on (user_id, catalog_id)
+		migrationDropInventoryPurchaseDate,                 // Drops unused purchase_date column
+		migrationDropInventoryCondition,                    // Drops unused condition column
+		migrationImageAssets,                               // Adds centralized image asset storage + references
+		migrationGearCatalogImageScanned,                   // Marks moderated user uploads as scanned for admin review
+		migrationGearCatalogPublishedStatus,                // Normalizes catalog status to published/pending/removed
+		migrationGearCatalogPublishAutoApproveScannedImage, // Aligns published items to approved image status
 	}
 
 	for i, migration := range migrations {
@@ -544,7 +547,7 @@ CREATE TABLE IF NOT EXISTS gear_catalog (
     specs JSONB DEFAULT '{}',
     source VARCHAR(50) NOT NULL DEFAULT 'user-submitted',
     created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
     canonical_key VARCHAR(1024) NOT NULL,
     image_url TEXT,
     description TEXT,
@@ -787,4 +790,58 @@ BEGIN
         FOREIGN KEY (image_asset_id) REFERENCES image_assets(id) ON DELETE SET NULL;
     END IF;
 END $$;
+`
+
+// Migration to introduce "scanned" image_status for moderated user-submitted catalog images.
+const migrationGearCatalogImageScanned = `
+-- Mark existing moderated user-submitted images as scanned (pending admin curation)
+UPDATE gear_catalog
+SET image_status = 'scanned',
+    image_curated_by_user_id = NULL,
+    image_curated_at = NULL
+WHERE COALESCE(image_status, 'missing') = 'missing'
+  AND image_asset_id IS NOT NULL
+  AND image_curated_by_user_id IS NULL
+  AND image_curated_at IS NULL;
+`
+
+// Migration to normalize gear catalog status values to published/pending/removed.
+const migrationGearCatalogPublishedStatus = `
+-- Map legacy status values to new canonical values.
+UPDATE gear_catalog SET status = 'published' WHERE status = 'active';
+UPDATE gear_catalog SET status = 'removed' WHERE status IN ('flagged', 'rejected');
+UPDATE gear_catalog SET status = 'pending' WHERE status IS NULL OR status NOT IN ('published', 'pending', 'removed');
+
+-- Default new rows to pending moderation unless explicitly published by admin action.
+ALTER TABLE gear_catalog ALTER COLUMN status SET DEFAULT 'pending';
+
+-- Enforce canonical status values.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'chk_gear_catalog_status'
+    ) THEN
+        ALTER TABLE gear_catalog DROP CONSTRAINT chk_gear_catalog_status;
+    END IF;
+END $$;
+
+ALTER TABLE gear_catalog
+ADD CONSTRAINT chk_gear_catalog_status
+CHECK (status IN ('published', 'pending', 'removed'));
+`
+
+// Migration to keep published records aligned with finalized image curation.
+const migrationGearCatalogPublishAutoApproveScannedImage = `
+UPDATE gear_catalog
+SET image_status = 'approved',
+    image_curated_by_user_id = COALESCE(image_curated_by_user_id, created_by_user_id),
+    image_curated_at = COALESCE(image_curated_at, NOW()),
+    updated_at = NOW()
+WHERE status = 'published'
+  AND COALESCE(image_status, 'missing') = 'scanned'
+  AND (
+    image_asset_id IS NOT NULL
+    OR image_data IS NOT NULL
+    OR (image_url IS NOT NULL AND image_url != '')
+  );
 `

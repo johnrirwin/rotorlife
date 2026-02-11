@@ -3,6 +3,7 @@ import type { EquipmentItem, InventoryItem, EquipmentCategory, AddInventoryParam
 import { EQUIPMENT_CATEGORIES } from '../equipmentTypes';
 import type { GearCatalogItem } from '../gearCatalogTypes';
 import { getCatalogItemDisplayName, gearTypeToEquipmentCategory } from '../gearCatalogTypes';
+import { moderateGearCatalogImageUpload, saveGearCatalogImageUpload } from '../gearCatalogApi';
 import { CatalogSearchModal } from './CatalogSearchModal';
 
 interface AddGearModalProps {
@@ -265,6 +266,8 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
         isOpen={true}
         onClose={onClose}
         onSelectItem={handleCatalogSelect}
+        onModerateCatalogImage={moderateGearCatalogImageUpload}
+        onSaveCatalogImageUpload={saveGearCatalogImageUpload}
       />
     );
   }
