@@ -415,6 +415,44 @@ func (s *fakeBuildStore) SetStatus(ctx context.Context, id string, ownerUserID s
 	return cloneBuild(build), nil
 }
 
+func (s *fakeBuildStore) SetImage(ctx context.Context, id string, ownerUserID string, imageAssetID string) (string, error) {
+	build := s.byID[id]
+	if build == nil || build.OwnerUserID != ownerUserID {
+		return "", nil
+	}
+	prev := build.ImageAssetID
+	build.ImageAssetID = imageAssetID
+	build.UpdatedAt = time.Now().UTC()
+	return prev, nil
+}
+
+func (s *fakeBuildStore) GetImageForOwner(ctx context.Context, id string, ownerUserID string) ([]byte, error) {
+	build := s.byID[id]
+	if build == nil || build.OwnerUserID != ownerUserID || build.ImageAssetID == "" {
+		return nil, nil
+	}
+	return []byte("image"), nil
+}
+
+func (s *fakeBuildStore) GetPublicImage(ctx context.Context, id string) ([]byte, error) {
+	build := s.byID[id]
+	if build == nil || build.Status != models.BuildStatusPublished || build.ImageAssetID == "" {
+		return nil, nil
+	}
+	return []byte("image"), nil
+}
+
+func (s *fakeBuildStore) DeleteImage(ctx context.Context, id string, ownerUserID string) (string, error) {
+	build := s.byID[id]
+	if build == nil || build.OwnerUserID != ownerUserID {
+		return "", nil
+	}
+	prev := build.ImageAssetID
+	build.ImageAssetID = ""
+	build.UpdatedAt = time.Now().UTC()
+	return prev, nil
+}
+
 func (s *fakeBuildStore) Delete(ctx context.Context, id string, ownerUserID string) (bool, error) {
 	build := s.byID[id]
 	if build == nil || build.OwnerUserID != ownerUserID {

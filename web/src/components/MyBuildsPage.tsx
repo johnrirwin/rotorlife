@@ -4,9 +4,12 @@ import {
   createBuildFromAircraft,
   createDraftBuild,
   deleteMyBuild,
+  getMyBuildImageUrl,
   getMyBuild,
   listMyBuilds,
+  moderateBuildImageUpload,
   publishMyBuild,
+  saveBuildImageUpload,
   unpublishMyBuild,
   updateMyBuild,
 } from '../buildApi';
@@ -14,6 +17,20 @@ import type { Build, BuildValidationError } from '../buildTypes';
 import type { Aircraft } from '../aircraftTypes';
 import { listAircraft } from '../aircraftApi';
 import { BuildBuilder } from './BuildBuilder';
+import { ImageUploadModal, type UploadStatusTone } from './ImageUploadModal';
+
+interface PendingBuildImage {
+  previewUrl: string;
+  uploadId?: string;
+  moderationStatus?: 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
+  moderationReason?: string;
+}
+
+function revokeBlobUrl(url?: string | null) {
+  if (url && url.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
+}
 
 export function MyBuildsPage() {
   const location = useLocation();
@@ -33,6 +50,14 @@ export function MyBuildsPage() {
   const [validationErrors, setValidationErrors] = useState<BuildValidationError[]>([]);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [deleteTargetBuildId, setDeleteTargetBuildId] = useState<string | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [modalImage, setModalImage] = useState<PendingBuildImage | null>(null);
+  const [imageStatusText, setImageStatusText] = useState<string | null>(null);
+  const [imageStatusTone, setImageStatusTone] = useState<UploadStatusTone>('neutral');
+  const [isImageUploading, setIsImageUploading] = useState(false);
+  const [isImageSaving, setIsImageSaving] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const modalPreviewRef = useRef<string | null>(null);
 
   const loadBuildList = useCallback(async () => {
     setIsLoadingList(true);
@@ -88,6 +113,28 @@ export function MyBuildsPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load build'))
       .finally(() => setIsLoadingBuild(false));
   }, [selectedBuildId]);
+
+  useEffect(() => {
+    if (modalImage?.previewUrl) {
+      revokeBlobUrl(modalImage.previewUrl);
+    }
+    setShowImageModal(false);
+    setModalImage(null);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
+    setImageError(null);
+    setIsImageUploading(false);
+    setIsImageSaving(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBuildId]);
+
+  useEffect(() => {
+    modalPreviewRef.current = modalImage?.previewUrl ?? null;
+  }, [modalImage?.previewUrl]);
+
+  useEffect(() => () => {
+    revokeBlobUrl(modalPreviewRef.current);
+  }, []);
 
   const handleCreateDraft = async () => {
     setError(null);
@@ -178,6 +225,116 @@ export function MyBuildsPage() {
     }
   };
 
+  const closeImageModal = () => {
+    if (modalImage?.previewUrl) {
+      revokeBlobUrl(modalImage.previewUrl);
+    }
+    setShowImageModal(false);
+    setModalImage(null);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
+    setImageError(null);
+    setIsImageUploading(false);
+    setIsImageSaving(false);
+  };
+
+  const handleOpenImageModal = () => {
+    if (isImageSaving) return;
+    setShowImageModal(true);
+    setImageError(null);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
+    setModalImage(null);
+  };
+
+  const handleImageFileSelect = async (file: File) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setImageError('Only JPEG, PNG, and WebP images are allowed');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setImageError('Image must be less than 2MB');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    if (modalImage?.previewUrl) {
+      revokeBlobUrl(modalImage.previewUrl);
+    }
+
+    setModalImage({ previewUrl });
+    setImageError(null);
+
+    try {
+      setIsImageUploading(true);
+      setImageStatusTone('neutral');
+      setImageStatusText('Checking image for safety…');
+
+      const moderation = await moderateBuildImageUpload(file);
+      if (moderation.status === 'APPROVED' && moderation.uploadId) {
+        setModalImage({
+          previewUrl,
+          uploadId: moderation.uploadId,
+          moderationStatus: moderation.status,
+          moderationReason: moderation.reason,
+        });
+        setImageStatusTone('success');
+        setImageStatusText('Approved');
+      } else if (moderation.status === 'REJECTED') {
+        setModalImage({
+          previewUrl,
+          moderationStatus: moderation.status,
+          moderationReason: moderation.reason,
+        });
+        setImageStatusTone('error');
+        setImageStatusText('Not allowed');
+      } else {
+        setModalImage({
+          previewUrl,
+          moderationStatus: moderation.status,
+          moderationReason: moderation.reason,
+        });
+        setImageStatusTone('error');
+        setImageStatusText('Unable to verify right now');
+      }
+    } catch (err) {
+      setModalImage({
+        previewUrl,
+        moderationStatus: 'PENDING_REVIEW',
+      });
+      setImageStatusTone('error');
+      setImageStatusText('Unable to verify right now');
+      setImageError(err instanceof Error ? err.message : 'Unable to verify image right now');
+    } finally {
+      setIsImageUploading(false);
+    }
+  };
+
+  const refreshBuildAfterImageChange = async (buildId: string) => {
+    const refreshed = await getMyBuild(buildId);
+    setEditorBuild(refreshed);
+    setBuilds((prev) => [refreshed, ...prev.filter((item) => item.id !== refreshed.id)]);
+  };
+
+  const handleSaveImage = async () => {
+    if (isImageSaving) return;
+    if (!editorBuild) return;
+    if (!modalImage?.uploadId || modalImage.moderationStatus !== 'APPROVED') return;
+
+    setIsImageSaving(true);
+    setImageError(null);
+    try {
+      await saveBuildImageUpload(editorBuild.id, modalImage.uploadId);
+      await refreshBuildAfterImageChange(editorBuild.id);
+      closeImageModal();
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Failed to upload build image');
+    } finally {
+      setIsImageSaving(false);
+    }
+  };
+
   const handleDelete = async (buildId: string) => {
     setIsSaving(true);
     setError(null);
@@ -245,6 +402,16 @@ export function MyBuildsPage() {
         return editorBuild.status;
     }
   }, [editorBuild]);
+
+  const buildImagePreviewUrl = useMemo(() => {
+    if (!editorBuild?.mainImageUrl) {
+      return null;
+    }
+    if (editorBuild.mainImageUrl.startsWith('/api/builds/')) {
+      return getMyBuildImageUrl(editorBuild.id);
+    }
+    return editorBuild.mainImageUrl;
+  }, [editorBuild?.id, editorBuild?.mainImageUrl]);
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -392,6 +559,10 @@ export function MyBuildsPage() {
                   description={editorBuild.description || ''}
                   parts={editorBuild.parts || []}
                   validationErrors={validationErrors}
+                  imagePreviewUrl={buildImagePreviewUrl}
+                  onImageAction={handleOpenImageModal}
+                  imageActionLabel={buildImagePreviewUrl ? 'Change Image' : 'Upload Image'}
+                  imageHelperText="JPEG, PNG, or WebP. Max 2MB."
                   onTitleChange={(value) => setEditorBuild((prev) => (prev ? { ...prev, title: value } : prev))}
                   onDescriptionChange={(value) => setEditorBuild((prev) => (prev ? { ...prev, description: value } : prev))}
                   onPartsChange={(parts) => setEditorBuild((prev) => (prev ? { ...prev, parts } : prev))}
@@ -454,6 +625,33 @@ export function MyBuildsPage() {
           </div>
         </div>
       )}
+
+      <ImageUploadModal
+        isOpen={showImageModal}
+        title={buildImagePreviewUrl ? 'Update Build Image' : 'Upload Build Image'}
+        previewUrl={modalImage?.previewUrl ?? buildImagePreviewUrl}
+        previewAlt={editorBuild?.title || 'Build image preview'}
+        placeholder="🚁"
+        accept="image/jpeg,image/jpg,image/png,image/webp"
+        helperText="JPEG, PNG, or WebP. Max 2MB."
+        selectButtonLabel={modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
+        onSelectFile={handleImageFileSelect}
+        onClose={closeImageModal}
+        onSave={() => { void handleSaveImage(); }}
+        disableSelect={isImageUploading || isImageSaving}
+        disableClose={isImageSaving}
+        disableSave={
+          isImageSaving ||
+          isImageUploading ||
+          !modalImage?.uploadId ||
+          modalImage.moderationStatus !== 'APPROVED'
+        }
+        saveLabel={isImageSaving ? 'Saving...' : 'Save Image'}
+        statusText={imageStatusText}
+        statusTone={imageStatusTone}
+        statusReason={modalImage?.moderationReason}
+        errorMessage={imageError}
+      />
     </div>
   );
 }
