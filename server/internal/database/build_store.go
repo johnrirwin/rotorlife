@@ -115,7 +115,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 			b.published_at,
 			u.id,
 			u.call_sign,
-			COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), u.email),
+			COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), NULLIF(u.call_sign, ''), 'Pilot'),
 			COALESCE(u.profile_visibility, 'public') = 'public'
 		FROM builds b
 		LEFT JOIN users u ON b.owner_user_id = u.id
@@ -211,7 +211,7 @@ func (s *BuildStore) ListPublic(ctx context.Context, params models.BuildListPara
 			b.published_at,
 			u.id,
 			u.call_sign,
-			COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), u.email),
+			COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), NULLIF(u.call_sign, ''), 'Pilot'),
 			COALESCE(u.profile_visibility, 'public') = 'public'
 		FROM builds b
 		LEFT JOIN users u ON b.owner_user_id = u.id
@@ -632,7 +632,7 @@ var baseBuildSelect = `
 		b.published_at,
 		u.id,
 		u.call_sign,
-		COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), u.email),
+		COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), NULLIF(u.call_sign, ''), 'Pilot'),
 		COALESCE(u.profile_visibility, 'public') = 'public'
 	FROM builds b
 	LEFT JOIN users u ON b.owner_user_id = u.id
