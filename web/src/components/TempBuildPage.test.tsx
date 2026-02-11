@@ -6,6 +6,7 @@ import { TempBuildPage } from './TempBuildPage';
 vi.mock('../buildApi', () => ({
   getTempBuild: vi.fn(),
   updateTempBuild: vi.fn(),
+  shareTempBuild: vi.fn(),
 }));
 
 import { getTempBuild } from '../buildApi';

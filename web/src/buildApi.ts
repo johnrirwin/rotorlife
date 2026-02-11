@@ -99,6 +99,12 @@ export async function updateTempBuild(token: string, params: UpdateBuildParams):
   }, false);
 }
 
+export async function shareTempBuild(token: string): Promise<Build> {
+  return fetchJSON<Build>(`/api/builds/temp/${token}/share`, {
+    method: 'POST',
+  }, false);
+}
+
 // Authenticated build management
 export async function listMyBuilds(params?: BuildListParams): Promise<BuildListResponse> {
   return fetchJSON<BuildListResponse>(`/api/builds${buildQuery(params)}`);

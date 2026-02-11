@@ -10,6 +10,7 @@ type BuildStatus string
 
 const (
 	BuildStatusTemp        BuildStatus = "TEMP"
+	BuildStatusShared      BuildStatus = "SHARED"
 	BuildStatusDraft       BuildStatus = "DRAFT"
 	BuildStatusPublished   BuildStatus = "PUBLISHED"
 	BuildStatusUnpublished BuildStatus = "UNPUBLISHED"
@@ -20,6 +21,8 @@ func NormalizeBuildStatus(status BuildStatus) BuildStatus {
 	switch strings.ToUpper(strings.TrimSpace(string(status))) {
 	case string(BuildStatusTemp):
 		return BuildStatusTemp
+	case string(BuildStatusShared):
+		return BuildStatusShared
 	case string(BuildStatusDraft):
 		return BuildStatusDraft
 	case string(BuildStatusPublished):

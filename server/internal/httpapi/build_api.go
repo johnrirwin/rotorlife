@@ -120,10 +120,39 @@ func (api *BuildAPI) handleTempCollection(w http.ResponseWriter, r *http.Request
 }
 
 func (api *BuildAPI) handleTempItem(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/builds/temp/"))
-	if token == "" {
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/builds/temp/"), "/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" {
 		api.writeError(w, http.StatusBadRequest, "invalid_token", "temp build token is required")
 		return
+	}
+	token := strings.TrimSpace(parts[0])
+
+	if len(parts) > 1 {
+		switch parts[1] {
+		case "share":
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			shared, err := api.service.ShareTempByToken(r.Context(), token)
+			if err != nil {
+				api.logger.Error("Share temp build failed", logging.WithField("error", err.Error()))
+				api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to share temporary build")
+				return
+			}
+			if shared == nil {
+				api.writeError(w, http.StatusNotFound, "not_found", "temporary build not found or expired")
+				return
+			}
+
+			api.writeJSON(w, http.StatusOK, shared)
+			return
+		default:
+			api.writeError(w, http.StatusNotFound, "not_found", "unknown temporary build action")
+			return
+		}
 	}
 
 	switch r.Method {

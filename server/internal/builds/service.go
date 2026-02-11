@@ -49,6 +49,7 @@ type buildStore interface {
 	GetTempByToken(ctx context.Context, token string) (*models.Build, error)
 	Update(ctx context.Context, id string, ownerUserID string, params models.UpdateBuildParams) (*models.Build, error)
 	UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error)
+	ShareTempByToken(ctx context.Context, token string) (*models.Build, error)
 	SetStatus(ctx context.Context, id string, ownerUserID string, status models.BuildStatus) (*models.Build, error)
 	Delete(ctx context.Context, id string, ownerUserID string) (bool, error)
 	DeleteExpiredTemp(ctx context.Context, cutoff time.Time) (int64, error)
@@ -188,6 +189,20 @@ func (s *Service) UpdateTempByToken(ctx context.Context, token string, params mo
 	}
 
 	build, err := s.store.UpdateTempByToken(ctx, strings.TrimSpace(token), params)
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	build.Token = ""
+	return build, nil
+}
+
+// ShareTempByToken promotes a temporary build link so it no longer expires.
+func (s *Service) ShareTempByToken(ctx context.Context, token string) (*models.Build, error) {
+	build, err := s.store.ShareTempByToken(ctx, strings.TrimSpace(token))
 	if err != nil {
 		return nil, err
 	}

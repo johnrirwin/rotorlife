@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getTempBuild, updateTempBuild } from '../buildApi';
+import { getTempBuild, shareTempBuild, updateTempBuild } from '../buildApi';
 import type { Build, BuildPart } from '../buildTypes';
 import { BuildBuilder } from './BuildBuilder';
 
@@ -10,6 +10,7 @@ export function TempBuildPage() {
   const [build, setBuild] = useState<Build | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const [autoSaveMessage, setAutoSaveMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export function TempBuildPage() {
           parts: response.parts ?? [],
         };
         setBuild(normalized);
-        lastSavedPayloadRef.current = buildPayloadKey(normalized);
+        lastSavedPayloadRef.current = buildPartsPayloadKey(normalized.parts);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load temporary build'))
       .finally(() => setIsLoading(false));
@@ -42,7 +43,7 @@ export function TempBuildPage() {
   useEffect(() => {
     if (!token || !build) return;
 
-    const payloadKey = buildPayloadKey(build);
+    const payloadKey = buildPartsPayloadKey(build.parts);
     if (payloadKey === lastSavedPayloadRef.current) return;
 
     const timeout = window.setTimeout(async () => {
@@ -88,6 +89,28 @@ export function TempBuildPage() {
     window.setTimeout(() => setCopyMessage(null), 2500);
   };
 
+  const handleShare = async () => {
+    if (!token || !build || build.status === 'SHARED') return;
+
+    setIsSharing(true);
+    setError(null);
+    try {
+      const shared = await shareTempBuild(token);
+      setBuild((prev) => (prev ? { ...prev, ...shared } : shared));
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setCopyMessage('Shared link copied to clipboard. This link will not expire.');
+      } catch {
+        setCopyMessage('Link shared. Copy the URL manually if clipboard access is blocked.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to share temporary build');
+    } finally {
+      setIsSharing(false);
+      window.setTimeout(() => setCopyMessage(null), 3000);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex-1 overflow-y-auto p-6">
@@ -118,11 +141,23 @@ export function TempBuildPage() {
                 ← Back to Public Builds
               </Link>
               <h1 className="text-2xl font-semibold text-white">Temporary Build</h1>
-              <p className="text-sm text-slate-400">
-                This build link expires on {build.expiresAt ? new Date(build.expiresAt).toLocaleString() : 'unknown date'}.
-              </p>
+              {build.status === 'SHARED' ? (
+                <p className="text-sm text-emerald-300">This link has been shared and will not expire.</p>
+              ) : (
+                <p className="text-sm text-slate-400">
+                  This build link expires on {build.expiresAt ? new Date(build.expiresAt).toLocaleString() : 'unknown date'}.
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={isSharing || build.status === 'SHARED'}
+                onClick={handleShare}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {build.status === 'SHARED' ? 'Shared' : isSharing ? 'Sharing...' : 'Share'}
+              </button>
               <button
                 type="button"
                 onClick={handleCopy}
@@ -136,6 +171,11 @@ export function TempBuildPage() {
           <div className="mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300">
             <p className="break-all">{shareUrl}</p>
           </div>
+          {build.status !== 'SHARED' && (
+            <p className="mt-2 text-xs text-amber-300">
+              Copying this URL manually keeps it temporary. Click Share to make the link permanent.
+            </p>
+          )}
 
           {copyMessage && <p className="mt-2 text-xs text-emerald-300">{copyMessage}</p>}
           {isAutoSaving && <p className="mt-2 text-xs text-slate-300">Saving changes...</p>}
@@ -167,10 +207,6 @@ function toPartInputs(parts?: BuildPart[]) {
     }));
 }
 
-function buildPayloadKey(build: Build) {
-  return JSON.stringify({
-    title: build.title ?? '',
-    description: build.description ?? '',
-    parts: toPartInputs(build.parts),
-  });
+function buildPartsPayloadKey(parts?: BuildPart[]) {
+  return JSON.stringify(toPartInputs(parts));
 }

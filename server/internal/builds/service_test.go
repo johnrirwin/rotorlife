@@ -137,6 +137,54 @@ func TestTempBuildCreateAndRetrieve(t *testing.T) {
 	}
 }
 
+func TestShareTempByToken_PromotesBuildAndClearsExpiry(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	created, err := svc.CreateTemp(ctx, "", models.CreateBuildParams{
+		Title: "Visitor Build",
+		Parts: []models.BuildPartInput{{GearType: models.GearTypeFrame, CatalogItemID: "frame-1"}},
+	})
+	if err != nil {
+		t.Fatalf("CreateTemp error: %v", err)
+	}
+
+	shared, err := svc.ShareTempByToken(ctx, created.Token)
+	if err != nil {
+		t.Fatalf("ShareTempByToken error: %v", err)
+	}
+	if shared == nil {
+		t.Fatalf("expected shared build")
+	}
+	if shared.Status != models.BuildStatusShared {
+		t.Fatalf("status=%s want SHARED", shared.Status)
+	}
+	if shared.ExpiresAt != nil {
+		t.Fatalf("expected expiresAt to be cleared")
+	}
+
+	// Shared builds should remain retrievable even when temp cleanup runs.
+	deleted, err := svc.CleanupExpiredTemp(ctx)
+	if err != nil {
+		t.Fatalf("CleanupExpiredTemp error: %v", err)
+	}
+	if deleted != 0 {
+		t.Fatalf("expected cleanup to skip shared build, deleted=%d", deleted)
+	}
+
+	fetched, err := svc.GetTempByToken(ctx, created.Token)
+	if err != nil {
+		t.Fatalf("GetTempByToken error: %v", err)
+	}
+	if fetched == nil {
+		t.Fatalf("expected shared build to remain retrievable")
+	}
+	if fetched.Status != models.BuildStatusShared {
+		t.Fatalf("status=%s want SHARED", fetched.Status)
+	}
+}
+
 func TestDeleteByOwner(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
@@ -223,7 +271,8 @@ func (s *fakeBuildStore) Create(ctx context.Context, ownerUserID string, status 
 func (s *fakeBuildStore) ListByOwner(ctx context.Context, ownerUserID string, params models.BuildListParams) (*models.BuildListResponse, error) {
 	items := make([]models.Build, 0)
 	for _, build := range s.byID {
-		if build.OwnerUserID == ownerUserID && build.Status != models.BuildStatusTemp {
+		if build.OwnerUserID == ownerUserID &&
+			(build.Status == models.BuildStatusDraft || build.Status == models.BuildStatusPublished || build.Status == models.BuildStatusUnpublished) {
 			items = append(items, *cloneBuild(build))
 		}
 	}
@@ -270,7 +319,13 @@ func (s *fakeBuildStore) GetTempByToken(ctx context.Context, token string) (*mod
 		return nil, nil
 	}
 	build := s.byID[id]
-	if build == nil || build.Status != models.BuildStatusTemp {
+	if build == nil {
+		return nil, nil
+	}
+	if build.Status == models.BuildStatusShared {
+		return cloneBuild(build), nil
+	}
+	if build.Status != models.BuildStatusTemp {
 		return nil, nil
 	}
 	if build.ExpiresAt != nil && build.ExpiresAt.Before(time.Now().UTC()) {
@@ -303,7 +358,7 @@ func (s *fakeBuildStore) UpdateTempByToken(ctx context.Context, token string, pa
 		return nil, nil
 	}
 	build := s.byID[id]
-	if build == nil || build.Status != models.BuildStatusTemp {
+	if build == nil || (build.Status != models.BuildStatusTemp && build.Status != models.BuildStatusShared) {
 		return nil, nil
 	}
 	if params.Title != nil {
@@ -315,6 +370,30 @@ func (s *fakeBuildStore) UpdateTempByToken(ctx context.Context, token string, pa
 	if params.Parts != nil {
 		build.Parts = convertParts(params.Parts)
 	}
+	build.UpdatedAt = time.Now().UTC()
+	return cloneBuild(build), nil
+}
+
+func (s *fakeBuildStore) ShareTempByToken(ctx context.Context, token string) (*models.Build, error) {
+	id, ok := s.byToken[token]
+	if !ok {
+		return nil, nil
+	}
+	build := s.byID[id]
+	if build == nil {
+		return nil, nil
+	}
+	if build.Status == models.BuildStatusShared {
+		return cloneBuild(build), nil
+	}
+	if build.Status != models.BuildStatusTemp {
+		return nil, nil
+	}
+	if build.ExpiresAt != nil && build.ExpiresAt.Before(time.Now().UTC()) {
+		return nil, nil
+	}
+	build.Status = models.BuildStatusShared
+	build.ExpiresAt = nil
 	build.UpdatedAt = time.Now().UTC()
 	return cloneBuild(build), nil
 }
@@ -337,7 +416,10 @@ func (s *fakeBuildStore) SetStatus(ctx context.Context, id string, ownerUserID s
 
 func (s *fakeBuildStore) Delete(ctx context.Context, id string, ownerUserID string) (bool, error) {
 	build := s.byID[id]
-	if build == nil || build.OwnerUserID != ownerUserID || build.Status == models.BuildStatusTemp {
+	if build == nil || build.OwnerUserID != ownerUserID {
+		return false, nil
+	}
+	if build.Status != models.BuildStatusDraft && build.Status != models.BuildStatusPublished && build.Status != models.BuildStatusUnpublished {
 		return false, nil
 	}
 	delete(s.byID, id)

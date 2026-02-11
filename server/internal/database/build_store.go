@@ -93,7 +93,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 	countQuery := `
 		SELECT COUNT(*)
 		FROM builds b
-		WHERE b.owner_user_id = $1 AND b.status != 'TEMP'
+		WHERE b.owner_user_id = $1 AND b.status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
 	`
 	var totalCount int
 	if err := s.db.QueryRowContext(ctx, countQuery, ownerUserID).Scan(&totalCount); err != nil {
@@ -119,7 +119,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 			COALESCE(u.profile_visibility, 'public') = 'public'
 		FROM builds b
 		LEFT JOIN users u ON b.owner_user_id = u.id
-		WHERE b.owner_user_id = $1 AND b.status != 'TEMP'
+		WHERE b.owner_user_id = $1 AND b.status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
 		ORDER BY b.updated_at DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -289,7 +289,12 @@ func (s *BuildStore) GetPublic(ctx context.Context, id string) (*models.Build, e
 
 // GetTempByToken fetches an unexpired temp build by secret token.
 func (s *BuildStore) GetTempByToken(ctx context.Context, token string) (*models.Build, error) {
-	query := baseBuildSelect + ` WHERE b.token = $1 AND b.status = 'TEMP' AND (b.expires_at IS NULL OR b.expires_at > NOW())`
+	query := baseBuildSelect + `
+		WHERE b.token = $1
+		  AND (
+			(b.status = 'TEMP' AND (b.expires_at IS NULL OR b.expires_at > NOW()))
+			OR b.status = 'SHARED'
+		  )`
 	build, err := s.scanBuild(ctx, query, token)
 	if err != nil || build == nil {
 		return build, err
@@ -326,7 +331,7 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 	query := fmt.Sprintf(`
 		UPDATE builds
 		SET %s
-		WHERE id = $%d AND owner_user_id = $%d AND status != 'TEMP'
+		WHERE id = $%d AND owner_user_id = $%d AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
 	`, strings.Join(setClauses, ", "), argIndex, argIndex+1)
 	args = append(args, id, ownerUserID)
 
@@ -383,7 +388,7 @@ func (s *BuildStore) UpdateTempByToken(ctx context.Context, token string, params
 	query := fmt.Sprintf(`
 		UPDATE builds
 		SET %s
-		WHERE id = $%d AND status = 'TEMP'
+		WHERE id = $%d AND status IN ('TEMP', 'SHARED')
 	`, strings.Join(setClauses, ", "), argIndex)
 	args = append(args, build.ID)
 
@@ -404,6 +409,33 @@ func (s *BuildStore) UpdateTempByToken(ctx context.Context, token string, params
 	return s.GetTempByToken(ctx, token)
 }
 
+// ShareTempByToken promotes a temp build token to a permanent shared link.
+func (s *BuildStore) ShareTempByToken(ctx context.Context, token string) (*models.Build, error) {
+	build, err := s.GetTempByToken(ctx, token)
+	if err != nil || build == nil {
+		return build, err
+	}
+
+	if build.Status == models.BuildStatusShared {
+		return build, nil
+	}
+
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE builds SET status = 'SHARED', expires_at = NULL, updated_at = NOW() WHERE id = $1 AND status = 'TEMP'`,
+		build.ID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to share temp build: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return nil, nil
+	}
+
+	return s.GetTempByToken(ctx, token)
+}
+
 // SetStatus updates a build's publication status.
 func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID string, status models.BuildStatus) (*models.Build, error) {
 	status = models.NormalizeBuildStatus(status)
@@ -414,7 +446,7 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 		query = `
 			UPDATE builds
 			SET status = 'PUBLISHED', published_at = NOW(), updated_at = NOW()
-			WHERE id = $1 AND owner_user_id = $2 AND status != 'TEMP'
+			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED')
 		`
 	case models.BuildStatusUnpublished:
 		query = `
@@ -442,7 +474,7 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 func (s *BuildStore) Delete(ctx context.Context, id string, ownerUserID string) (bool, error) {
 	result, err := s.db.ExecContext(
 		ctx,
-		`DELETE FROM builds WHERE id = $1 AND owner_user_id = $2 AND status != 'TEMP'`,
+		`DELETE FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')`,
 		id,
 		ownerUserID,
 	)

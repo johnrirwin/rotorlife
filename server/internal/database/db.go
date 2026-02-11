@@ -875,7 +875,7 @@ END $$;
 
 ALTER TABLE builds
 ADD CONSTRAINT chk_builds_status
-CHECK (status IN ('TEMP', 'DRAFT', 'PUBLISHED', 'UNPUBLISHED'));
+CHECK (status IN ('TEMP', 'SHARED', 'DRAFT', 'PUBLISHED', 'UNPUBLISHED'));
 
 CREATE TABLE IF NOT EXISTS build_parts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
