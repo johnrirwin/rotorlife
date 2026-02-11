@@ -112,7 +112,7 @@ export const Sidebar = memo(function Sidebar({
         </div>
 
         {/* Section Switcher */}
-        <div className="px-4 pt-1 pb-4 md:p-4 border-b border-slate-800">
+        <div className="px-4 pt-1 pb-4 md:p-4 md:border-b md:border-slate-800">
         <nav className="flex flex-col gap-1">
           {/* Public sections */}
           {!isAuthenticated && (
