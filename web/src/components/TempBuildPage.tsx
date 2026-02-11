@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getTempBuild, updateTempBuild } from '../buildApi';
 import type { Build, BuildPart } from '../buildTypes';
@@ -9,9 +9,11 @@ export function TempBuildPage() {
 
   const [build, setBuild] = useState<Build | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [autoSaveMessage, setAutoSaveMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const lastSavedPayloadRef = useRef<string>('');
 
   useEffect(() => {
     if (!token) return;
@@ -19,7 +21,14 @@ export function TempBuildPage() {
     setError(null);
 
     getTempBuild(token)
-      .then((response) => setBuild(response))
+      .then((response) => {
+        const normalized = {
+          ...response,
+          parts: response.parts ?? [],
+        };
+        setBuild(normalized);
+        lastSavedPayloadRef.current = buildPayloadKey(normalized);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load temporary build'))
       .finally(() => setIsLoading(false));
   }, [token]);
@@ -30,24 +39,41 @@ export function TempBuildPage() {
     return `${window.location.origin}/builds/temp/${token}`;
   }, [token]);
 
-  const handleSave = async () => {
+  useEffect(() => {
     if (!token || !build) return;
 
-    setIsSaving(true);
-    setError(null);
-    try {
-      const updated = await updateTempBuild(token, {
-        title: build.title,
-        description: build.description,
-        parts: toPartInputs(build.parts),
-      });
-      setBuild(updated);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save temporary build');
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    const payloadKey = buildPayloadKey(build);
+    if (payloadKey === lastSavedPayloadRef.current) return;
+
+    const timeout = window.setTimeout(async () => {
+      setIsAutoSaving(true);
+      setAutoSaveMessage(null);
+      setError(null);
+      try {
+        const updated = await updateTempBuild(token, {
+          title: build.title,
+          description: build.description,
+          parts: toPartInputs(build.parts),
+        });
+        lastSavedPayloadRef.current = payloadKey;
+        setBuild((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            updatedAt: updated.updatedAt,
+            expiresAt: updated.expiresAt ?? prev.expiresAt,
+          };
+        });
+        setAutoSaveMessage('Changes saved');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to save temporary build');
+      } finally {
+        setIsAutoSaving(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [build, token]);
 
   const handleCopy = async () => {
     if (!shareUrl) return;
@@ -104,14 +130,6 @@ export function TempBuildPage() {
               >
                 Copy Share URL
               </button>
-              <button
-                type="button"
-                disabled={isSaving}
-                onClick={handleSave}
-                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSaving ? 'Saving...' : 'Save'}
-              </button>
             </div>
           </div>
 
@@ -120,6 +138,8 @@ export function TempBuildPage() {
           </div>
 
           {copyMessage && <p className="mt-2 text-xs text-emerald-300">{copyMessage}</p>}
+          {isAutoSaving && <p className="mt-2 text-xs text-slate-300">Saving changes...</p>}
+          {!isAutoSaving && autoSaveMessage && <p className="mt-2 text-xs text-emerald-300">{autoSaveMessage}</p>}
           {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
         </header>
 
@@ -129,15 +149,15 @@ export function TempBuildPage() {
           parts={build.parts || []}
           onTitleChange={(value) => setBuild((prev) => (prev ? { ...prev, title: value } : prev))}
           onDescriptionChange={(value) => setBuild((prev) => (prev ? { ...prev, description: value } : prev))}
-          onPartsChange={(parts) => setBuild((prev) => (prev ? { ...prev, parts } : prev))}
+          onPartsChange={(parts) => setBuild((prev) => (prev ? { ...prev, parts: parts ?? [] } : prev))}
         />
       </div>
     </div>
   );
 }
 
-function toPartInputs(parts: BuildPart[]) {
-  return parts
+function toPartInputs(parts?: BuildPart[]) {
+  return (parts ?? [])
     .filter((part) => part.catalogItemId)
     .map((part) => ({
       gearType: part.gearType,
@@ -145,4 +165,12 @@ function toPartInputs(parts: BuildPart[]) {
       position: part.position,
       notes: part.notes,
     }));
+}
+
+function buildPayloadKey(build: Build) {
+  return JSON.stringify({
+    title: build.title ?? '',
+    description: build.description ?? '',
+    parts: toPartInputs(build.parts),
+  });
 }
