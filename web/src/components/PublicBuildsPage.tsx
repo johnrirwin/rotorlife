@@ -69,7 +69,7 @@ export function PublicBuildsPage() {
             <div>
               <h1 className="text-2xl font-semibold text-white">Public Builds</h1>
               <p className="mt-1 text-sm text-slate-400">
-                Browse pilot builds, compare parts, and start your own PCPartPicker-style setup.
+                Browse pilot builds, compare parts, and start your own setup.
               </p>
             </div>
             <button

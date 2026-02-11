@@ -235,7 +235,7 @@ export const Sidebar = memo(function Sidebar({
             }
           />
 
-          {/* Gear Catalog - always accessible, public like PCPartPicker */}
+          {/* Gear Catalog - always accessible */}
           <NavItem
             section="gear-catalog"
             label="Gear Catalog"
