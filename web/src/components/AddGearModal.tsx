@@ -157,6 +157,11 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
         setIsSubmitting(false);
         return;
       }
+      if (!editItem && parsedQuantity === 0) {
+        setError('Quantity must be at least 1 when adding gear');
+        setIsSubmitting(false);
+        return;
+      }
 
       const trimmedPurchasePrice = purchasePrice.trim();
       let parsedPurchasePrice: number | undefined;
@@ -384,7 +389,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
                     }
                   }}
                   inputMode="numeric"
-                  min={0}
+                  min={editItem ? 0 : 1}
                   step={1}
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
                 />

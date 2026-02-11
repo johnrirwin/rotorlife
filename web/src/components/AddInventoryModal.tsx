@@ -77,13 +77,30 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
         setIsSubmitting(false);
         return;
       }
+      if (!editItem && parsedQuantity === 0) {
+        setError('Quantity must be at least 1 when adding gear');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const trimmedPurchasePrice = purchasePrice.trim();
+      let parsedPurchasePrice: number | undefined;
+      if (trimmedPurchasePrice) {
+        const parsed = Number(trimmedPurchasePrice);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          setError('Enter a valid purchase price');
+          setIsSubmitting(false);
+          return;
+        }
+        parsedPurchasePrice = parsed;
+      }
 
       const params: AddInventoryParams = {
         name: name.trim(),
         category,
         manufacturer: manufacturer.trim() || undefined,
         quantity: parsedQuantity,
-        purchasePrice: purchasePrice ? parseFloat(purchasePrice) : undefined,
+        purchasePrice: parsedPurchasePrice,
         purchaseSeller: purchaseSeller.trim() || undefined,
         notes: notes.trim() || undefined,
         buildId: buildId.trim() || undefined,
@@ -196,7 +213,7 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
                     }
                   }}
                   inputMode="numeric"
-                  min={0}
+                  min={editItem ? 0 : 1}
                   step={1}
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
                 />

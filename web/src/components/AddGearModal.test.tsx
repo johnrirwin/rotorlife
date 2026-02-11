@@ -69,4 +69,37 @@ describe('AddGearModal quantity editing', () => {
       );
     });
   });
+
+  it('rejects quantity 0 while adding new gear', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AddGearModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        equipmentItem={{
+          id: 'equip-1',
+          name: 'Shop Motor',
+          category: 'motors',
+          manufacturer: 'Acme',
+          price: 21.5,
+          currency: 'USD',
+          seller: 'Test Seller',
+          sellerId: 'seller-1',
+          productUrl: 'https://example.com/motor',
+          inStock: true,
+          stockQty: 10,
+          lastChecked: '2026-02-11T00:00:00Z',
+        }}
+      />,
+    );
+
+    const quantityInput = screen.getByRole('spinbutton') as HTMLInputElement;
+    fireEvent.change(quantityInput, { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add to My Inventory' }));
+
+    expect(quantityInput).toHaveAttribute('min', '1');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
 });
