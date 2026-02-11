@@ -31,6 +31,8 @@ export function MyBuildsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<BuildValidationError[]>([]);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [deleteTargetBuildId, setDeleteTargetBuildId] = useState<string | null>(null);
 
   const loadBuildList = useCallback(async () => {
     setIsLoadingList(true);
@@ -176,26 +178,57 @@ export function MyBuildsPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!editorBuild) return;
-    const confirmed = window.confirm(`Delete "${editorBuild.title || 'this build'}"? This cannot be undone.`);
-    if (!confirmed) return;
-
+  const handleDelete = async (buildId: string) => {
     setIsSaving(true);
     setError(null);
     try {
-      await deleteMyBuild(editorBuild.id);
-      const remaining = builds.filter((item) => item.id !== editorBuild.id);
+      await deleteMyBuild(buildId);
+      const remaining = builds.filter((item) => item.id !== buildId);
       setBuilds(remaining);
       setSelectedBuildId(remaining[0]?.id ?? null);
       setEditorBuild(null);
       setValidationErrors([]);
+      setShowDeleteConfirmModal(false);
+      setDeleteTargetBuildId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete build');
     } finally {
       setIsSaving(false);
     }
   };
+
+  const handleOpenDeleteConfirm = () => {
+    if (!editorBuild || isSaving) return;
+    setDeleteTargetBuildId(editorBuild.id);
+    setShowDeleteConfirmModal(true);
+  };
+
+  const handleCancelDelete = () => {
+    if (isSaving) return;
+    setShowDeleteConfirmModal(false);
+    setDeleteTargetBuildId(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetBuildId) return;
+    await handleDelete(deleteTargetBuildId);
+  };
+
+  useEffect(() => {
+    if (!showDeleteConfirmModal) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (isSaving) return;
+        setShowDeleteConfirmModal(false);
+        setDeleteTargetBuildId(null);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isSaving, showDeleteConfirmModal]);
 
   const selectedStatusLabel = useMemo(() => {
     if (!editorBuild) return '';
@@ -308,7 +341,7 @@ export function MyBuildsPage() {
                     <button
                       type="button"
                       disabled={isSaving}
-                      onClick={handleDelete}
+                      onClick={handleOpenDeleteConfirm}
                       className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Delete
@@ -368,6 +401,59 @@ export function MyBuildsPage() {
           </section>
         </div>
       </div>
+
+      {showDeleteConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={handleCancelDelete} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-build-modal-title"
+            className="relative w-full max-w-md rounded-xl border border-red-500/40 bg-slate-800 p-6 shadow-2xl"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h3 id="delete-build-modal-title" className="text-lg font-semibold text-white">Delete build?</h3>
+              <button
+                onClick={handleCancelDelete}
+                disabled={isSaving}
+                aria-label="Close delete build modal"
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white disabled:opacity-50"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="mb-6 text-sm text-slate-300">
+              Delete{' '}
+              <span className="font-semibold text-white">
+                {editorBuild?.title || 'this build'}
+              </span>
+              ? This cannot be undone.
+            </p>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCancelDelete}
+                disabled={isSaving}
+                className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmDelete()}
+                disabled={isSaving}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
