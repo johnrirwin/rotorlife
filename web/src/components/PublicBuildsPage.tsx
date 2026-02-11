@@ -88,7 +88,7 @@ export function PublicBuildsPage() {
               <select
                 value="newest"
                 disabled
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="h-11 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 text-white"
               >
                 <option value="newest">Newest</option>
               </select>
@@ -99,7 +99,7 @@ export function PublicBuildsPage() {
                 value={frameFilter}
                 onChange={(event) => setFrameFilter(event.target.value)}
                 placeholder="Example: 5, whoop, 7 inch"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder:text-slate-500 focus:border-primary-500 focus:outline-none"
+                className="h-11 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 text-white placeholder:text-slate-500 focus:border-primary-500 focus:outline-none"
               />
             </label>
           </div>
