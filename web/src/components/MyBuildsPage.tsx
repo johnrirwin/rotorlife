@@ -10,6 +10,7 @@ import {
   moderateBuildImageUpload,
   publishMyBuild,
   saveBuildImageUpload,
+  type ModerationStatus,
   unpublishMyBuild,
   updateMyBuild,
 } from '../buildApi';
@@ -22,7 +23,7 @@ import { ImageUploadModal, type UploadStatusTone } from './ImageUploadModal';
 interface PendingBuildImage {
   previewUrl: string;
   uploadId?: string;
-  moderationStatus?: 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
+  moderationStatus?: ModerationStatus;
   moderationReason?: string;
 }
 

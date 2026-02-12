@@ -7,16 +7,10 @@ import type {
   TempBuildCreateResponse,
   UpdateBuildParams,
 } from './buildTypes';
+import type { ImageModerationResponse } from './imageTypes';
+export type { ModerationStatus, ImageModerationResponse } from './imageTypes';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-
-export type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
-
-export interface ImageModerationResponse {
-  status: ModerationStatus;
-  reason?: string;
-  uploadId?: string;
-}
 
 function getAccessToken(): string | null {
   return localStorage.getItem('access_token');
