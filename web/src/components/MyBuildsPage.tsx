@@ -203,7 +203,7 @@ export function MyBuildsPage() {
       }
       setValidationErrors([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to publish build');
+      setError(err instanceof Error ? err.message : 'Failed to submit build for review');
     } finally {
       setIsSaving(false);
     }
@@ -393,6 +393,8 @@ export function MyBuildsPage() {
     switch (editorBuild.status) {
       case 'PUBLISHED':
         return 'Published';
+      case 'PENDING_REVIEW':
+        return 'Pending Moderation';
       case 'UNPUBLISHED':
         return 'Unpublished';
       case 'DRAFT':
@@ -420,7 +422,7 @@ export function MyBuildsPage() {
         <header className="rounded-2xl border border-slate-700 bg-slate-800/70 p-5">
           <h1 className="text-2xl font-semibold text-white">My Builds</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Manage private drafts, build from an existing aircraft, and publish to the public builds feed.
+            Manage drafts, build from an existing aircraft, and submit builds for moderation before public release.
           </p>
 
           <div className="mt-4 flex flex-wrap gap-3">
@@ -535,6 +537,14 @@ export function MyBuildsPage() {
                       >
                         Unpublish
                       </button>
+                    ) : editorBuild.status === 'PENDING_REVIEW' ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-medium text-slate-300"
+                      >
+                        Awaiting Review
+                      </button>
                     ) : (
                       <button
                         type="button"
@@ -542,7 +552,7 @@ export function MyBuildsPage() {
                         onClick={handlePublish}
                         className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Publish
+                        Submit for Review
                       </button>
                     )}
                   </div>
