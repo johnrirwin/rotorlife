@@ -23,6 +23,19 @@ function getAuthToken(): string | null {
   return tokens?.accessToken || null;
 }
 
+function withAdminImageAuth(url: string, cacheBuster?: number): string {
+  const params = new URLSearchParams();
+  const token = getAuthToken();
+  if (token) {
+    params.set('token', token);
+  }
+  if (typeof cacheBuster === 'number') {
+    params.set('v', cacheBuster.toString());
+  }
+  const query = params.toString();
+  return query ? `${url}?${query}` : url;
+}
+
 // Admin search for gear items (with imageStatus filter)
 export async function adminSearchGear(
   params: AdminGearSearchParams
@@ -253,7 +266,7 @@ export function getGearImageUrl(gearId: string, cacheBuster?: number): string {
 // Use this in admin UI to always see latest image
 export function getAdminGearImageUrl(gearId: string, cacheBuster?: number): string {
   const url = `/api/admin/gear/${gearId}/image`;
-  return cacheBuster ? `${url}?v=${cacheBuster}` : url;
+  return withAdminImageAuth(url, cacheBuster);
 }
 
 export interface AdminBuildSearchParams {
@@ -449,7 +462,7 @@ export async function adminDeleteBuildImage(id: string): Promise<void> {
 
 export function getAdminBuildImageUrl(buildId: string, cacheBuster?: number): string {
   const url = `/api/admin/builds/${buildId}/image`;
-  return cacheBuster ? `${url}?v=${cacheBuster}` : url;
+  return withAdminImageAuth(url, cacheBuster);
 }
 
 // Admin search for users (admin only)
