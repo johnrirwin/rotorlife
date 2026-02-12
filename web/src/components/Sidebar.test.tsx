@@ -218,10 +218,10 @@ describe('Sidebar', () => {
     })
 
     it('shows only Content Moderation for content-admin users', () => {
-      const gearAdminUser: User = { ...mockUser, isContentAdmin: true }
+      const contentAdminUser: User = { ...mockUser, isContentAdmin: true }
       render(<Sidebar {...createDefaultProps({
         isAuthenticated: true,
-        user: gearAdminUser,
+        user: contentAdminUser,
       })} />)
 
       expect(screen.getByText('Content Moderation')).toBeInTheDocument()

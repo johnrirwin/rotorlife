@@ -167,7 +167,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
   const [appliedQuery, setAppliedQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>('');
   const [catalogStatus, setCatalogStatus] = useState<CatalogItemStatus | ''>('pending');
-  const [imageStatus, setImageStatus] = useState<ImageStatusFilter | ''>(''); // Default to "Needs Work"
+  const [imageStatus, setImageStatus] = useState<ImageStatusFilter | ''>(''); // No image status filter by default
   const pageSize = 30;
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -270,13 +270,17 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
     }
   }, [hasContentAdminAccess, appliedBuildQuery, buildStatus]);
 
-  // Initial load and auto-search when filters change
+  // Initial load and auto-search when gear filters change.
   useEffect(() => {
-    if (hasContentAdminAccess) {
-      loadItems(true);
-      void loadBuilds();
-    }
-  }, [hasContentAdminAccess, loadItems, loadBuilds]);
+    if (!hasContentAdminAccess) return;
+    void loadItems(true);
+  }, [hasContentAdminAccess, loadItems]);
+
+  // Initial load and auto-search when build filters change.
+  useEffect(() => {
+    if (!hasContentAdminAccess) return;
+    void loadBuilds();
+  }, [hasContentAdminAccess, loadBuilds]);
 
   const handleGearSearch = useCallback(() => {
     setIsMobileControlsOpen(false);
