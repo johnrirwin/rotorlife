@@ -14,8 +14,6 @@ export function TempBuildPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
-  const [autoSaveMessage, setAutoSaveMessage] = useState<string | null>(null);
-  const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const lastSavedPayloadRef = useRef<string>('');
   const lastSharedPayloadRef = useRef<string>('');
@@ -75,7 +73,6 @@ export function TempBuildPage() {
 
     const timeout = window.setTimeout(async () => {
       setIsAutoSaving(true);
-      setAutoSaveMessage(null);
       setError(null);
       try {
         const updated = await updateTempBuild(activeToken, {
@@ -94,7 +91,6 @@ export function TempBuildPage() {
           hydratedTokenRef.current = nextToken;
           navigate(`/builds/temp/${nextToken}`, { replace: true });
         }
-        setAutoSaveMessage('Changes saved');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save temporary build');
       } finally {
@@ -108,19 +104,15 @@ export function TempBuildPage() {
   const handleCopy = async () => {
     if (!activeToken || !build || !shareUrl) return;
     if (isLoading || isAutoSaving || hydratedTokenRef.current !== activeToken || buildTokenRef.current !== activeToken) {
-      setCopyMessage('Please wait for the latest build URL to finish updating, then copy again.');
-      window.setTimeout(() => setCopyMessage(null), 3000);
       return;
     }
 
     if (build.status === 'SHARED') {
       try {
         await navigator.clipboard.writeText(shareUrl);
-        setCopyMessage('Share URL copied to clipboard.');
       } catch {
-        setCopyMessage('Unable to copy automatically. Copy the URL manually.');
+        // best effort only; no toast needed
       }
-      window.setTimeout(() => setCopyMessage(null), 3000);
       return;
     }
 
@@ -156,15 +148,13 @@ export function TempBuildPage() {
 
       try {
         await navigator.clipboard.writeText(copiedUrl);
-        setCopyMessage('Share URL copied to clipboard. This link is saved permanently.');
       } catch {
-        setCopyMessage('Share URL saved. Copy the URL manually if clipboard access is blocked.');
+        // best effort only; no toast needed
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to copy share URL');
     } finally {
       setIsCopying(false);
-      window.setTimeout(() => setCopyMessage(null), 3000);
     }
   };
 
@@ -210,7 +200,7 @@ export function TempBuildPage() {
               <button
                 type="button"
                 onClick={handleCopy}
-                disabled={isCopying}
+                disabled={isCopying || isAutoSaving || isLoading || hydratedTokenRef.current !== activeToken || buildTokenRef.current !== activeToken}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isCopying ? 'Copying...' : 'Copy Share URL'}
@@ -224,9 +214,6 @@ export function TempBuildPage() {
           <p className="mt-2 text-xs text-slate-400">This URL rotates when the build changes. Copy Share URL saves a permanent snapshot link.</p>
           {hasUnsharedChanges && <p className="mt-2 text-xs text-amber-300">Build changed since last copy. Copy again to generate a new share URL.</p>}
 
-          {copyMessage && <p className="mt-2 text-xs text-emerald-300">{copyMessage}</p>}
-          {isAutoSaving && <p className="mt-2 text-xs text-slate-300">Saving changes...</p>}
-          {!isAutoSaving && autoSaveMessage && <p className="mt-2 text-xs text-emerald-300">{autoSaveMessage}</p>}
           {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
         </header>
 
