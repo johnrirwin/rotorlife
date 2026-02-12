@@ -426,12 +426,12 @@ export function MyBuildsPage() {
             <button
               type="button"
               onClick={handleCreateDraft}
-              className="h-12 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white transition hover:bg-primary-500"
+              className="h-10 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white transition hover:bg-primary-500"
             >
               New Draft
             </button>
 
-            <div className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-1 sm:w-auto">
+            <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
               <select
                 value={selectedAircraftId}
                 onChange={(event) => setSelectedAircraftId(event.target.value)}
