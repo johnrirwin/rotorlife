@@ -13,10 +13,13 @@ locals {
     aws_secretsmanager_secret.db_password.arn
   ], var.additional_secretsmanager_secret_arns)
 
-  managed_log_group_arns = [
+  managed_log_group_arns = compact([
     aws_cloudwatch_log_group.server.arn,
-    aws_cloudwatch_log_group.web.arn
-  ]
+    aws_cloudwatch_log_group.web.arn,
+    # The scheduled refresh task uses its own log group; include it when enabled so
+    # the CloudWatch Logs VPC endpoint policy allows CreateLogStream/PutLogEvents.
+    try(aws_cloudwatch_log_group.news_refresh[0].arn, ""),
+  ])
 
   additional_cloudwatch_log_group_arns_with_streams = flatten([
     for arn in var.additional_cloudwatch_log_group_arns : [arn, "${arn}:*"]
