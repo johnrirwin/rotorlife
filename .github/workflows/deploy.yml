@@ -215,15 +215,98 @@ jobs:
 
       - name: Wait for server service stability
         run: |
-          aws ecs wait services-stable \
-            --cluster $ECS_CLUSTER \
-            --services $ECS_SERVER_SERVICE
+          set -euo pipefail
+
+          # The AWS CLI waiter has a fixed max wait time (~10 minutes) and can time out
+          # during slower deployments (e.g., ALB deregistration delay). Retry to extend
+          # the effective wait time while still using the built-in stable condition.
+          max_attempts=3
+          for attempt in $(seq 1 $max_attempts); do
+            echo "::group::Wait for $ECS_SERVER_SERVICE stability (attempt $attempt/$max_attempts)"
+            set +e
+            aws ecs wait services-stable \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVER_SERVICE"
+            rc=$?
+            set -e
+            echo "::endgroup::"
+
+            if [ "$rc" -eq 0 ]; then
+              echo "✅ $ECS_SERVER_SERVICE has reached a steady state."
+              aws ecs describe-services \
+                --cluster "$ECS_CLUSTER" \
+                --services "$ECS_SERVER_SERVICE" \
+                --query 'services[0].events[0:5].[createdAt,message]' \
+                --output table || true
+              exit 0
+            fi
+
+            echo "Waiter failed (exit code $rc). Dumping recent service events for debugging:"
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVER_SERVICE" \
+              --query 'services[0].deployments[*].{status:status,rollout:rolloutState,desired:desiredCount,running:runningCount,pending:pendingCount,updatedAt:updatedAt,taskDef:taskDefinition}' \
+              --output table || true
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVER_SERVICE" \
+              --query 'services[0].events[0:10].[createdAt,message]' \
+              --output table || true
+
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              echo "Retrying in 15 seconds..."
+              sleep 15
+            fi
+          done
+
+          echo "❌ $ECS_SERVER_SERVICE did not become stable in time."
+          exit 1
 
       - name: Wait for web service stability
         run: |
-          aws ecs wait services-stable \
-            --cluster $ECS_CLUSTER \
-            --services $ECS_WEB_SERVICE
+          set -euo pipefail
+
+          max_attempts=3
+          for attempt in $(seq 1 $max_attempts); do
+            echo "::group::Wait for $ECS_WEB_SERVICE stability (attempt $attempt/$max_attempts)"
+            set +e
+            aws ecs wait services-stable \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_WEB_SERVICE"
+            rc=$?
+            set -e
+            echo "::endgroup::"
+
+            if [ "$rc" -eq 0 ]; then
+              echo "✅ $ECS_WEB_SERVICE has reached a steady state."
+              aws ecs describe-services \
+                --cluster "$ECS_CLUSTER" \
+                --services "$ECS_WEB_SERVICE" \
+                --query 'services[0].events[0:5].[createdAt,message]' \
+                --output table || true
+              exit 0
+            fi
+
+            echo "Waiter failed (exit code $rc). Dumping recent service events for debugging:"
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_WEB_SERVICE" \
+              --query 'services[0].deployments[*].{status:status,rollout:rolloutState,desired:desiredCount,running:runningCount,pending:pendingCount,updatedAt:updatedAt,taskDef:taskDefinition}' \
+              --output table || true
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_WEB_SERVICE" \
+              --query 'services[0].events[0:10].[createdAt,message]' \
+              --output table || true
+
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              echo "Retrying in 15 seconds..."
+              sleep 15
+            fi
+          done
+
+          echo "❌ $ECS_WEB_SERVICE did not become stable in time."
+          exit 1
 
       - name: Get Application URL
         run: |
