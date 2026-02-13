@@ -19,7 +19,13 @@ export function sanitizeNextPath(
     return fallback;
   }
 
-  if (next === '/login' || next.startsWith('/login?') || next.startsWith('/auth/callback')) {
+  if (
+    next === '/login' ||
+    next.startsWith('/login?') ||
+    next === '/auth/callback' ||
+    next.startsWith('/auth/callback?') ||
+    next.startsWith('/auth/callback#')
+  ) {
     return fallback;
   }
 
@@ -56,6 +62,7 @@ export function consumePendingLoginNext(): string | null {
   try {
     const value = sessionStorage.getItem(LOGIN_NEXT_STORAGE_KEY);
     sessionStorage.removeItem(LOGIN_NEXT_STORAGE_KEY);
+    // Re-sanitize because sessionStorage can be modified outside this helper.
     return value ? sanitizeNextPath(value) : null;
   } catch {
     return null;

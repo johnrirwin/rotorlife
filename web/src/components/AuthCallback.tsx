@@ -7,6 +7,14 @@ export function AuthCallback() {
   const [isProcessing, setIsProcessing] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const setErrorSafe = (value: string) => {
+      if (!isMounted) return;
+      setError(value);
+      setIsProcessing(false);
+    };
+
     const handleCallback = async () => {
       // Get tokens from URL fragment
       const hash = window.location.hash.substring(1);
@@ -20,14 +28,12 @@ export function AuthCallback() {
       const errorDesc = searchParams.get('error_description');
 
       if (errorParam) {
-        setError(errorDesc || errorParam);
-        setIsProcessing(false);
+        setErrorSafe(errorDesc || errorParam);
         return;
       }
 
       if (!accessToken || !refreshToken) {
-        setError('Missing authentication tokens');
-        setIsProcessing(false);
+        setErrorSafe('Missing authentication tokens');
         return;
       }
 
@@ -52,12 +58,15 @@ export function AuthCallback() {
         window.location.replace(nextPath);
       } catch (err) {
         clearStoredTokens();
-        setError(err instanceof Error ? err.message : 'Authentication failed');
-        setIsProcessing(false);
+        setErrorSafe(err instanceof Error ? err.message : 'Authentication failed');
       }
     };
 
     handleCallback();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   if (error) {

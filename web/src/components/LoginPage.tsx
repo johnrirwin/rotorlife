@@ -39,7 +39,7 @@ export function LoginPage() {
     const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8080';
     const redirectUri = `${apiBase}/api/auth/google/callback`;
     const scope = 'openid email profile';
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(nextPath)}`;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}`;
 
     setIsRedirecting(true);
     window.location.assign(authUrl);
