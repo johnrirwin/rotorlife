@@ -557,11 +557,15 @@ function getCreatorSocialLinks(creator: CreatorSpotlight): Array<{ platform: 'yo
 }
 
 function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelect: (creator: CreatorSpotlight) => void }) {
+  const maxVisibleTags = 3;
+  const visibleTags = creator.tags.slice(0, maxVisibleTags);
+  const hiddenTagCount = Math.max(creator.tags.length - visibleTags.length, 0);
+
   return (
     <button
       type="button"
       onClick={() => onSelect(creator)}
-      className={`block w-full text-left bg-slate-800 border rounded-xl p-5 hover:border-slate-500 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/80 ${
+      className={`block w-full text-left bg-slate-800 border rounded-xl p-5 hover:border-slate-500 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/80 min-h-56 h-full ${
         creator.featured
           ? 'border-primary-500/50 ring-1 ring-primary-500/20'
           : 'border-slate-700'
@@ -578,7 +582,7 @@ function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelec
           </svg>
         </div>
         
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-1">
             <div className="flex items-center gap-2 min-w-0">
               <h4 className="text-base font-semibold text-white group-hover:text-primary-400 transition-colors">
@@ -596,9 +600,9 @@ function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelec
             {creator.description}
           </p>
           
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 mt-auto">
             <div className="flex flex-wrap gap-1.5">
-              {creator.tags.map(tag => (
+              {visibleTags.map(tag => (
                 <span
                   key={tag}
                   className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-full"
@@ -606,6 +610,11 @@ function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelec
                   {tag}
                 </span>
               ))}
+              {hiddenTagCount > 0 && (
+                <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded-full">
+                  +{hiddenTagCount}
+                </span>
+              )}
             </div>
             {creator.subscribers && (
               <span className="text-xs text-slate-500 whitespace-nowrap">
