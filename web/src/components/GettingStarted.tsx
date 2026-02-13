@@ -557,11 +557,15 @@ function getCreatorSocialLinks(creator: CreatorSpotlight): Array<{ platform: 'yo
 }
 
 function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelect: (creator: CreatorSpotlight) => void }) {
+  const maxVisibleTags = 3;
+  const visibleTags = creator.tags.slice(0, maxVisibleTags);
+  const hiddenTagCount = Math.max(creator.tags.length - visibleTags.length, 0);
+
   return (
     <button
       type="button"
       onClick={() => onSelect(creator)}
-      className={`block w-full text-left bg-slate-800 border rounded-xl p-5 hover:border-slate-500 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/80 min-h-[220px] h-full ${
+      className={`block w-full text-left bg-slate-800 border rounded-xl p-5 hover:border-slate-500 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/80 min-h-56 h-full ${
         creator.featured
           ? 'border-primary-500/50 ring-1 ring-primary-500/20'
           : 'border-slate-700'
@@ -597,8 +601,8 @@ function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelec
           </p>
           
           <div className="flex items-center justify-between gap-2 mt-auto">
-            <div className="flex flex-wrap gap-1.5 max-h-11 overflow-hidden">
-              {creator.tags.map(tag => (
+            <div className="flex flex-wrap gap-1.5">
+              {visibleTags.map(tag => (
                 <span
                   key={tag}
                   className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-full"
@@ -606,6 +610,11 @@ function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelec
                   {tag}
                 </span>
               ))}
+              {hiddenTagCount > 0 && (
+                <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded-full">
+                  +{hiddenTagCount}
+                </span>
+              )}
             </div>
             {creator.subscribers && (
               <span className="text-xs text-slate-500 whitespace-nowrap">
@@ -877,7 +886,7 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 auto-rows-fr gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {TAKING_OFF_CREATORS.map(creator => (
               <CreatorCard key={creator.id} creator={creator} onSelect={setSelectedCreator} />
             ))}
