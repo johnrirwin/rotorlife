@@ -311,19 +311,11 @@ func (a *Aggregator) filterItems(items []models.FeedItem, params models.FilterPa
 
 	// Parse date filters
 	var fromTime, toTime time.Time
-	if params.FromDate != "" {
-		if t, err := time.Parse("2006-01-02", params.FromDate); err == nil {
-			fromTime = t
-		} else if t, err := time.Parse("01/02/2006", params.FromDate); err == nil {
-			fromTime = t
-		}
+	if t, ok := models.ParseDateFilter(params.FromDate); ok {
+		fromTime = t
 	}
-	if params.ToDate != "" {
-		if t, err := time.Parse("2006-01-02", params.ToDate); err == nil {
-			toTime = t.Add(24*time.Hour - time.Nanosecond) // End of day
-		} else if t, err := time.Parse("01/02/2006", params.ToDate); err == nil {
-			toTime = t.Add(24*time.Hour - time.Nanosecond)
-		}
+	if t, ok := models.ParseDateFilter(params.ToDate); ok {
+		toTime = t.Add(24*time.Hour - time.Nanosecond) // End of day
 	}
 
 	filtered := make([]models.FeedItem, 0)
@@ -333,15 +325,23 @@ func (a *Aggregator) filterItems(items []models.FeedItem, params models.FilterPa
 			continue
 		}
 
-		// Filter by source type
-		if params.SourceType != "" && !strings.EqualFold(item.SourceType, params.SourceType) {
-			// Map reddit to community
-			if params.SourceType == "community" && item.SourceType != "reddit" {
-				continue
-			} else if params.SourceType == "news" && item.SourceType != "rss" {
-				continue
-			} else if params.SourceType != "community" && params.SourceType != "news" {
-				continue
+		// Filter by source type (supports UI groupings like "community" and "news")
+		if params.SourceType != "" {
+			switch strings.ToLower(strings.TrimSpace(params.SourceType)) {
+			case "community":
+				// Community = reddit + forums
+				if !strings.EqualFold(item.SourceType, "reddit") && !strings.EqualFold(item.SourceType, "forum") {
+					continue
+				}
+			case "news":
+				// News = RSS feeds
+				if !strings.EqualFold(item.SourceType, "rss") {
+					continue
+				}
+			default:
+				if !strings.EqualFold(item.SourceType, params.SourceType) {
+					continue
+				}
 			}
 		}
 

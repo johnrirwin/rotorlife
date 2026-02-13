@@ -50,7 +50,9 @@ func (s *FeedItemStore) UpsertItems(ctx context.Context, items []models.FeedItem
 			$15, $16, $17, $18,
 			NOW(), NOW()
 		)
-		ON CONFLICT (id) DO UPDATE SET
+		-- The primary key is id, but we also enforce uniqueness on (lower(url), lower(source)).
+		-- Use that unique index as the conflict target so we don't fail if ID generation ever changes.
+		ON CONFLICT ((LOWER(url)), (LOWER(source))) DO UPDATE SET
 			title = EXCLUDED.title,
 			url = EXCLUDED.url,
 			source = EXCLUDED.source,
@@ -192,12 +194,12 @@ func (s *FeedItemStore) QueryItems(ctx context.Context, params models.FilterPara
 	}
 
 	// Filter by date range.
-	if fromTime, ok := parseFilterDate(params.FromDate); ok {
+	if fromTime, ok := models.ParseDateFilter(params.FromDate); ok {
 		whereParts = append(whereParts, fmt.Sprintf("published_at >= $%d", argPos))
 		args = append(args, fromTime)
 		argPos++
 	}
-	if toTime, ok := parseFilterDate(params.ToDate); ok {
+	if toTime, ok := models.ParseDateFilter(params.ToDate); ok {
 		// End of day for inclusive filter.
 		toTime = toTime.Add(24*time.Hour - time.Nanosecond)
 		whereParts = append(whereParts, fmt.Sprintf("published_at <= $%d", argPos))
@@ -317,20 +319,4 @@ func (s *FeedItemStore) QueryItems(ctx context.Context, params models.FilterPara
 	}
 
 	return items, total, nil
-}
-
-func parseFilterDate(s string) (time.Time, bool) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return time.Time{}, false
-	}
-
-	if t, err := time.Parse("2006-01-02", s); err == nil {
-		return t, true
-	}
-	if t, err := time.Parse("01/02/2006", s); err == nil {
-		return t, true
-	}
-
-	return time.Time{}, false
 }
