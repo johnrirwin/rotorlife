@@ -1451,3 +1451,31 @@ func (s *GearCatalogStore) AdminDelete(ctx context.Context, id string) error {
 
 	return nil
 }
+
+func (s *GearCatalogStore) AdminBulkDelete(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	query := `DELETE FROM gear_catalog WHERE id = ANY($1::uuid[]) RETURNING id`
+	rows, err := s.db.QueryContext(ctx, query, pq.Array(ids))
+	if err != nil {
+		return nil, fmt.Errorf("failed to bulk delete gear catalog items: %w", err)
+	}
+	defer rows.Close()
+
+	deletedIDs := make([]string, 0, len(ids))
+	for rows.Next() {
+		var deletedID string
+		if err := rows.Scan(&deletedID); err != nil {
+			return nil, fmt.Errorf("failed to scan deleted gear catalog id: %w", err)
+		}
+		deletedIDs = append(deletedIDs, deletedID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to bulk delete gear catalog items: %w", err)
+	}
+
+	return deletedIDs, nil
+}

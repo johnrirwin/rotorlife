@@ -101,6 +101,42 @@ export async function adminFindNearMatches(params: NearMatchParams): Promise<Nea
   return response.json();
 }
 
+type AdminBulkDeleteGearResponse = {
+  deletedIds: string[];
+  deletedCount: number;
+  notFoundIds: string[];
+  notFoundCount: number;
+};
+
+export async function adminBulkDeleteGear(ids: string[]): Promise<AdminBulkDeleteGearResponse> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new Error('ids is required');
+  }
+
+  const response = await fetch(`${API_BASE}/gear/bulk-delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ ids }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    throw new Error(data.error || 'Failed to delete gear items');
+  }
+
+  return response.json();
+}
+
 // Get a single gear item by ID
 export async function adminGetGear(id: string): Promise<GearCatalogItem> {
   const token = getAuthToken();

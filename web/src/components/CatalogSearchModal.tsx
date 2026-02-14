@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GearCatalogItem, GearType, CreateGearCatalogParams, DroneType, NearMatch } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 import { searchGearCatalog, createGearCatalogItem, findNearMatches, getPopularGear } from '../gearCatalogApi';
-import { adminFindNearMatches } from '../adminApi';
+import { adminBulkDeleteGear, adminFindNearMatches } from '../adminApi';
 import { ImageUploadModal } from './ImageUploadModal';
 
 type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
@@ -981,9 +981,10 @@ interface ImportCatalogItemsFormProps {
 type ImportCatalogRow = {
   id: string;
   params: CreateGearCatalogParams;
+  savedItemId?: string;
   duplicates?: NearMatch[];
   duplicateError?: string;
-  result?: 'created' | 'existing' | 'error';
+  result?: 'created' | 'existing' | 'deleted' | 'error';
   error?: string;
 };
 
@@ -996,6 +997,12 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [summary, setSummary] = useState<{ created: number; existing: number; failed: number } | null>(null);
+  const [savedFirstItem, setSavedFirstItem] = useState<GearCatalogItem | null>(null);
+  const [bulkDeleteStatus, setBulkDeleteStatus] = useState<string | null>(null);
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [duplicateProgress, setDuplicateProgress] = useState<{ current: number; total: number } | null>(null);
   const duplicateCheckRequestIdRef = useRef(0);
@@ -1070,6 +1077,11 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
     async (file: File) => {
       setError(null);
       setSummary(null);
+      setSavedFirstItem(null);
+      setBulkDeleteStatus(null);
+      setBulkDeleteError(null);
+      setShowBulkDeleteConfirm(false);
+      setBulkDeleteConfirmText('');
       setProgress(null);
       cancelDuplicateChecks();
 
@@ -1215,8 +1227,18 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
     setIsSubmitting(true);
     setError(null);
     setSummary(null);
+    setSavedFirstItem(null);
+    setBulkDeleteStatus(null);
+    setBulkDeleteError(null);
+    setShowBulkDeleteConfirm(false);
+    setBulkDeleteConfirmText('');
 
-    const nextRows: ImportCatalogRow[] = rows.map((row) => ({ ...row, result: undefined, error: undefined }));
+    const nextRows: ImportCatalogRow[] = rows.map((row) => ({
+      ...row,
+      result: undefined,
+      error: undefined,
+      savedItemId: undefined,
+    }));
     let created = 0;
     let existing = 0;
     let failed = 0;
@@ -1227,6 +1249,7 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
       try {
         const response = await createGearCatalogItem(nextRows[i].params);
         if (!firstItem) firstItem = response.item;
+        nextRows[i].savedItemId = response.item.id;
         if (response.existing) {
           existing += 1;
           nextRows[i].result = 'existing';
@@ -1244,16 +1267,81 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
     setRows(nextRows);
     setProgress(null);
     setSummary({ created, existing, failed });
+    setSavedFirstItem(firstItem);
     setIsSubmitting(false);
 
-    if (failed === 0 && firstItem) {
-      onSuccess(firstItem);
-    } else if (failed > 0) {
+    if (failed > 0) {
       setError(`Saved ${created + existing} item${created + existing === 1 ? '' : 's'} with ${failed} failure${failed === 1 ? '' : 's'}.`);
     }
   };
 
   const possibleDuplicateCount = rows.filter((row) => (row.duplicates?.length ?? 0) > 0).length;
+  const createdItemIds = rows
+    .filter((row) => row.result === 'created' && typeof row.savedItemId === 'string')
+    .map((row) => row.savedItemId as string);
+  const canBulkDelete = createdItemIds.length > 0;
+
+  const handleDone = () => {
+    if (!savedFirstItem) return;
+    onSuccess(savedFirstItem);
+  };
+
+  const handleOpenBulkDeleteConfirm = () => {
+    if (!canBulkDelete || isSubmitting || isCheckingDuplicates || isBulkDeleting) return;
+    setBulkDeleteError(null);
+    setBulkDeleteStatus(null);
+    setBulkDeleteConfirmText('');
+    setShowBulkDeleteConfirm(true);
+  };
+
+  const handleCancelBulkDelete = () => {
+    if (isBulkDeleting) return;
+    setShowBulkDeleteConfirm(false);
+    setBulkDeleteConfirmText('');
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (isBulkDeleting) return;
+
+    const trimmed = bulkDeleteConfirmText.trim().toUpperCase();
+    if (trimmed !== 'DELETE') return;
+
+    const idsToDelete = rows
+      .filter((row) => row.result === 'created' && typeof row.savedItemId === 'string')
+      .map((row) => row.savedItemId as string);
+
+    if (idsToDelete.length === 0) {
+      setShowBulkDeleteConfirm(false);
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    setBulkDeleteError(null);
+    setBulkDeleteStatus(null);
+
+    try {
+      const response = await adminBulkDeleteGear(idsToDelete);
+      const deletedSet = new Set(response.deletedIds ?? []);
+
+      setRows((prev) =>
+        prev.map((row) => {
+          if (row.result !== 'created' || !row.savedItemId) return row;
+          if (!deletedSet.has(row.savedItemId)) return row;
+          return { ...row, result: 'deleted' };
+        })
+      );
+
+      setBulkDeleteStatus(
+        `Deleted ${response.deletedCount} item${response.deletedCount === 1 ? '' : 's'}${response.notFoundCount ? ` (${response.notFoundCount} not found)` : ''}.`
+      );
+      setShowBulkDeleteConfirm(false);
+      setBulkDeleteConfirmText('');
+    } catch (err) {
+      setBulkDeleteError(err instanceof Error ? err.message : 'Failed to bulk delete items');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
@@ -1261,6 +1349,18 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
         {error && (
           <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
             {error}
+          </div>
+        )}
+
+        {bulkDeleteStatus && (
+          <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-300 text-sm">
+            {bulkDeleteStatus}
+          </div>
+        )}
+
+        {bulkDeleteError && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+            {bulkDeleteError}
           </div>
         )}
 
@@ -1347,6 +1447,12 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
           </div>
         )}
 
+        {summary && summary.failed === 0 && savedFirstItem && (
+          <div className="p-3 bg-primary-500/10 border border-primary-500/20 rounded-lg text-primary-200 text-sm">
+            Import complete. Click <span className="text-white font-medium">Done</span> to return to the gear list.
+          </div>
+        )}
+
         {progress && (
           <div className="flex items-center gap-3 text-sm text-slate-300">
             <div className="w-4 h-4 border-2 border-slate-500/40 border-t-primary-500 rounded-full animate-spin" />
@@ -1376,6 +1482,8 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
                 const borderClass =
                   row.result === 'error'
                     ? 'border-red-500/40'
+                    : row.result === 'deleted'
+                      ? 'border-red-500/30'
                     : row.result === 'created'
                       ? 'border-green-500/30'
                       : row.result === 'existing'
@@ -1413,6 +1521,9 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
                       )}
                       {row.result === 'existing' && (
                         <p className="mt-1 text-xs text-blue-300">Already exists</p>
+                      )}
+                      {row.result === 'deleted' && (
+                        <p className="mt-1 text-xs text-red-300">Deleted</p>
                       )}
                       {row.result === 'error' && row.error && (
                         <p className="mt-1 text-xs text-red-300">Error: {row.error}</p>
@@ -1473,26 +1584,126 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
         <button
           type="button"
           onClick={onCancel}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isCheckingDuplicates || isBulkDeleting}
           className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Back
         </button>
-        <button
-          type="submit"
-          disabled={isSubmitting || isCheckingDuplicates || rows.length === 0}
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2 justify-center"
-        >
-          {isSubmitting ? (
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          {summary && canBulkDelete && (
+            <button
+              type="button"
+              onClick={handleOpenBulkDeleteConfirm}
+              disabled={isSubmitting || isCheckingDuplicates || isBulkDeleting}
+              className="px-4 py-2 bg-red-600/80 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+            >
+              Bulk Delete ({createdItemIds.length})
+            </button>
           )}
-          Save {rows.length} Item{rows.length === 1 ? '' : 's'}
-        </button>
+
+          {(!summary || summary.failed > 0) && (
+            <button
+              type="submit"
+              disabled={isSubmitting || isCheckingDuplicates || isBulkDeleting || rows.length === 0}
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2 justify-center"
+            >
+              {isSubmitting ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              )}
+              {summary && summary.failed > 0 ? 'Retry Save' : `Save ${rows.length} Item${rows.length === 1 ? '' : 's'}`}
+            </button>
+          )}
+
+          {summary && savedFirstItem && (
+            <button
+              type="button"
+              onClick={handleDone}
+              disabled={isSubmitting || isCheckingDuplicates || isBulkDeleting}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+            >
+              Done
+            </button>
+          )}
+        </div>
       </div>
+
+      {showBulkDeleteConfirm && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={handleCancelBulkDelete} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="import-bulk-delete-title"
+            aria-describedby="import-bulk-delete-description"
+            className="relative bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50"
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <h3 id="import-bulk-delete-title" className="text-lg font-semibold text-white">
+                  Bulk Delete Created Items?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelBulkDelete}
+                disabled={isBulkDeleting}
+                aria-label="Close bulk delete modal"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p id="import-bulk-delete-description" className="text-slate-300 mb-4 text-sm">
+              This will permanently delete <span className="text-white font-medium">{createdItemIds.length}</span> gear catalog
+              item{createdItemIds.length === 1 ? '' : 's'}.
+            </p>
+
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Type <span className="text-white font-semibold">DELETE</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={bulkDeleteConfirmText}
+              onChange={(e) => setBulkDeleteConfirmText(e.target.value)}
+              disabled={isBulkDeleting}
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-red-400 disabled:opacity-50"
+              placeholder="DELETE"
+              autoFocus
+            />
+
+            <div className="mt-5 flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={handleCancelBulkDelete}
+                disabled={isBulkDeleting}
+                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmBulkDelete()}
+                disabled={isBulkDeleting || bulkDeleteConfirmText.trim().toUpperCase() !== 'DELETE'}
+                className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                {isBulkDeleting ? 'Deleting…' : `Delete ${createdItemIds.length}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
