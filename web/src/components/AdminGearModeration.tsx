@@ -118,6 +118,10 @@ function getCatalogStatusTextClass(status: CatalogItemStatus): string {
   }
 }
 
+function getGearTypeLabel(gearType: GearType): string {
+  return GEAR_TYPES.find((t) => t.value === gearType)?.label ?? gearType;
+}
+
 function getBuildStatusLabel(status: BuildStatus): string {
   switch (status) {
     case 'PENDING_REVIEW':
@@ -885,7 +889,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                           <td className="px-4 py-3 text-sm text-slate-400">{formatDate(item.updatedAt)}</td>
                           <td className="px-4 py-3 text-sm text-slate-300">
                             <span className="px-2 py-0.5 bg-slate-700/70 text-slate-300 rounded text-xs">
-                              {item.gearType}
+                              {getGearTypeLabel(item.gearType)}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-white font-medium">{item.brand}</td>
@@ -956,7 +960,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
-                            {item.gearType}
+                            {getGearTypeLabel(item.gearType)}
                           </span>
                           <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
                             {getCatalogStatusLabel(item.status)}
