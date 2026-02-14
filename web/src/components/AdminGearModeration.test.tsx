@@ -216,6 +216,30 @@ describe('AdminGearModeration', () => {
     });
   });
 
+  it('adds and saves specs from within the edit modal', async () => {
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Spec' }));
+
+    fireEvent.change(screen.getByPlaceholderText('Key'), { target: { value: 'kv' } });
+    fireEvent.change(screen.getByPlaceholderText('Value'), { target: { value: '1950' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(mockAdminUpdateGear).toHaveBeenCalledWith(
+        'gear-1',
+        expect.objectContaining({
+          specs: { kv: '1950' },
+        })
+      );
+    });
+  });
+
   it('deletes from within the edit modal and refreshes list', async () => {
     mockAdminSearchGear
       .mockResolvedValueOnce({ items: [mockItem], totalCount: 1 })

@@ -1637,6 +1637,8 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
   const [variant, setVariant] = useState('');
+  const [specRows, setSpecRows] = useState<Array<{ id: string; key: string; value: string }>>([]);
+  const [specsError, setSpecsError] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [msrp, setMsrp] = useState('');
   const [bestFor, setBestFor] = useState<DroneType[]>([]);
@@ -1664,6 +1666,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
   const imagePreviewRef = useRef<string | null>(null);
   const modalImagePreviewRef = useRef<string | null>(null);
+  const specRowIdRef = useRef(0);
 
   useEffect(() => {
     imagePreviewRef.current = imagePreview;
@@ -1700,6 +1703,19 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         setBestFor((freshItem.bestFor || []) as DroneType[]);
         setStatus(freshItem.status);
         setSelectedImageStatus(freshItem.imageStatus);
+        specRowIdRef.current = 0;
+        const specsObject =
+          freshItem.specs && typeof freshItem.specs === 'object' && !Array.isArray(freshItem.specs)
+            ? (freshItem.specs as Record<string, unknown>)
+            : {};
+        setSpecRows(
+          Object.entries(specsObject).map(([key, value]) => ({
+            id: `spec-${++specRowIdRef.current}`,
+            key,
+            value: value == null ? '' : String(value),
+          }))
+        );
+        setSpecsError(null);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load item');
@@ -1968,6 +1984,63 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     }
   };
 
+  const addSpecRow = () => {
+    setSpecRows((prev) => [
+      ...prev,
+      {
+        id: `spec-${++specRowIdRef.current}`,
+        key: '',
+        value: '',
+      },
+    ]);
+    setSpecsError(null);
+  };
+
+  const updateSpecRow = (rowId: string, field: 'key' | 'value', nextValue: string) => {
+    setSpecRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, [field]: nextValue } : row))
+    );
+    setSpecsError(null);
+  };
+
+  const removeSpecRow = (rowId: string) => {
+    setSpecRows((prev) => prev.filter((row) => row.id !== rowId));
+    setSpecsError(null);
+  };
+
+  const normalizeSpecsForCompare = (specs: unknown): Record<string, string> => {
+    if (!specs || typeof specs !== 'object' || Array.isArray(specs)) return {};
+    const record: Record<string, string> = {};
+    for (const [key, value] of Object.entries(specs as Record<string, unknown>)) {
+      record[key] = value == null ? '' : String(value).trim();
+    }
+    return record;
+  };
+
+  const normalizeSpecRowsForCompare = (rows: Array<{ key: string; value: string }>): Record<string, string> => {
+    const record: Record<string, string> = {};
+    for (const row of rows) {
+      const trimmedKey = row.key.trim();
+      if (!trimmedKey) continue;
+      record[trimmedKey] = row.value.trim();
+    }
+    return record;
+  };
+
+  const specsEqual = (a: Record<string, string>, b: Record<string, string>): boolean => {
+    const aKeys = Object.keys(a).sort();
+    const bKeys = Object.keys(b).sort();
+    if (aKeys.length !== bKeys.length) return false;
+    for (let i = 0; i < aKeys.length; i++) {
+      const key = aKeys[i];
+      if (key !== bKeys[i]) return false;
+      if (a[key] !== b[key]) return false;
+    }
+    return true;
+  };
+
+  const normalizeSpecValueForSave = (input: string): string => input.trim();
+
   const applyChanges = async (statusOverride?: CatalogItemStatus) => {
     if (!item) return;
 
@@ -1994,6 +2067,29 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         // Explicitly clear MSRP if it was previously set
         params.clearMsrp = true;
       }
+    }
+
+    const normalizedExistingSpecs = normalizeSpecsForCompare(item.specs);
+    const normalizedNextSpecs = normalizeSpecRowsForCompare(specRows);
+    if (!specsEqual(normalizedExistingSpecs, normalizedNextSpecs)) {
+      const trimmedRows = specRows
+        .map((row) => ({ key: row.key.trim(), value: row.value }))
+        .filter((row) => row.key.length > 0);
+      const keyCounts = new Map<string, number>();
+      for (const row of trimmedRows) {
+        keyCounts.set(row.key, (keyCounts.get(row.key) || 0) + 1);
+      }
+      const duplicateKey = Array.from(keyCounts.entries()).find(([, count]) => count > 1)?.[0];
+      if (duplicateKey) {
+        setSpecsError(`Duplicate spec key: ${duplicateKey}`);
+        throw new Error(`Duplicate spec key: ${duplicateKey}`);
+      }
+
+      const specsRecord: Record<string, unknown> = {};
+      for (const row of trimmedRows) {
+        specsRecord[row.key] = normalizeSpecValueForSave(row.value);
+      }
+      params.specs = specsRecord;
     }
 
     if (statusOverride) {
@@ -2246,6 +2342,59 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               placeholder="Brief description of the gear..."
               className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 resize-none"
             />
+          </div>
+
+          {/* Specs */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Specs (optional)
+            </label>
+
+            <div className="space-y-2">
+              {specRows.length === 0 ? (
+                <p className="text-xs text-slate-500">No specs yet. Add as many key/value pairs as you want.</p>
+              ) : (
+                specRows.map((row) => (
+                  <div key={row.id} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                    <input
+                      type="text"
+                      value={row.key}
+                      onChange={(e) => updateSpecRow(row.id, 'key', e.target.value)}
+                      placeholder="Key"
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                    />
+                    <input
+                      type="text"
+                      value={row.value}
+                      onChange={(e) => updateSpecRow(row.id, 'value', e.target.value)}
+                      placeholder="Value"
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSpecRow(row.id)}
+                      className="px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+                      aria-label={`Remove spec ${row.key || ''}`.trim()}
+                      title="Remove spec"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {specsError && (
+              <p className="mt-2 text-xs text-red-400">{specsError}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={addSpecRow}
+              className="mt-3 px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors"
+            >
+              Add Spec
+            </button>
           </div>
 
           {/* Best For - Drone Types */}
