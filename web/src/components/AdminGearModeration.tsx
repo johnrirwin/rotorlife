@@ -324,7 +324,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
     if (activeTab !== 'gear') return;
 
     const element = loadMoreRef.current;
-    if (!element || !hasMore) return;
+    if (!element || !hasMore || isLoading) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -337,7 +337,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
 
     observer.observe(element);
     return () => observer.disconnect();
-  }, [activeTab, hasMore, loadItems]);
+  }, [activeTab, hasMore, isLoading, loadItems]);
 
   const handleEditClick = (item: GearCatalogItem) => {
     setModalKey(k => k + 1); // Force modal remount to fetch fresh data
