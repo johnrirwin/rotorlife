@@ -2069,24 +2069,25 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
       }
     }
 
-    const normalizedExistingSpecs = normalizeSpecsForCompare(item.specs);
-    const normalizedNextSpecs = normalizeSpecRowsForCompare(specRows);
-    if (!specsEqual(normalizedExistingSpecs, normalizedNextSpecs)) {
-      const trimmedRows = specRows
-        .map((row) => ({ key: row.key.trim(), value: row.value.trim() }))
-        .filter((row) => row.key.length > 0);
-      const keyCounts = new Map<string, number>();
-      for (const row of trimmedRows) {
-        keyCounts.set(row.key, (keyCounts.get(row.key) || 0) + 1);
-      }
-      const duplicateKey = Array.from(keyCounts.entries()).find(([, count]) => count > 1)?.[0];
-      if (duplicateKey) {
-        setSpecsError(`Duplicate spec key: ${duplicateKey}`);
-        throw new Error(`Duplicate spec key: ${duplicateKey}`);
-      }
+    const trimmedSpecRows = specRows
+      .map((row) => ({ key: row.key.trim(), value: row.value.trim() }))
+      .filter((row) => row.key.length > 0);
 
+    const keyCounts = new Map<string, number>();
+    for (const row of trimmedSpecRows) {
+      keyCounts.set(row.key, (keyCounts.get(row.key) || 0) + 1);
+    }
+    const duplicateKey = Array.from(keyCounts.entries()).find(([, count]) => count > 1)?.[0];
+    if (duplicateKey) {
+      setSpecsError(`Duplicate spec key: ${duplicateKey}`);
+      throw new Error(`Duplicate spec key: ${duplicateKey}`);
+    }
+
+    const normalizedExistingSpecs = normalizeSpecsForCompare(item.specs);
+    const normalizedNextSpecs = normalizeSpecRowsForCompare(trimmedSpecRows);
+    if (!specsEqual(normalizedExistingSpecs, normalizedNextSpecs)) {
       const specsRecord: Record<string, unknown> = {};
-      for (const row of trimmedRows) {
+      for (const row of trimmedSpecRows) {
         specsRecord[row.key] = normalizeSpecValueForSave(row.value);
       }
       params.specs = specsRecord;

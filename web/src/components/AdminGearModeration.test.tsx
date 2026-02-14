@@ -326,6 +326,32 @@ describe('AdminGearModeration', () => {
     expect(mockAdminUpdateGear).not.toHaveBeenCalled();
   });
 
+  it('prevents saving when duplicate spec keys match existing specs', async () => {
+    mockAdminGetGear.mockResolvedValueOnce({
+      ...mockItem,
+      specs: { kv: '1950' },
+    });
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Spec' }));
+
+    const keyInputs = screen.getAllByPlaceholderText('Key');
+    const valueInputs = screen.getAllByPlaceholderText('Value');
+
+    fireEvent.change(keyInputs[1], { target: { value: 'kv' } });
+    fireEvent.change(valueInputs[1], { target: { value: '1950' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(await screen.findByText('Duplicate spec key: kv')).toBeInTheDocument();
+    expect(mockAdminUpdateGear).not.toHaveBeenCalled();
+  });
+
   it('filters out specs with empty keys before saving', async () => {
     mockAdminGetGear.mockResolvedValueOnce({
       ...mockItem,
