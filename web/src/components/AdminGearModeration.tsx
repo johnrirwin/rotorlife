@@ -2303,7 +2303,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               value={gearType}
               onChange={(e) => setGearType(e.target.value as GearType)}
               aria-label="Gear Type"
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+              className="w-full h-11 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
             >
               {GEAR_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
