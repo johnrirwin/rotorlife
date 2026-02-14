@@ -118,6 +118,10 @@ function getCatalogStatusTextClass(status: CatalogItemStatus): string {
   }
 }
 
+function getGearTypeLabel(gearType: GearType): string {
+  return GEAR_TYPES.find((t) => t.value === gearType)?.label ?? gearType;
+}
+
 function getBuildStatusLabel(status: BuildStatus): string {
   switch (status) {
     case 'PENDING_REVIEW':
@@ -885,7 +889,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                           <td className="px-4 py-3 text-sm text-slate-400">{formatDate(item.updatedAt)}</td>
                           <td className="px-4 py-3 text-sm text-slate-300">
                             <span className="px-2 py-0.5 bg-slate-700/70 text-slate-300 rounded text-xs">
-                              {item.gearType}
+                              {getGearTypeLabel(item.gearType)}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-white font-medium">{item.brand}</td>
@@ -956,7 +960,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
-                            {item.gearType}
+                            {getGearTypeLabel(item.gearType)}
                           </span>
                           <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
                             {getCatalogStatusLabel(item.status)}
@@ -1634,6 +1638,7 @@ interface AdminGearEditModalProps {
 function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEditModalProps) {
   const [item, setItem] = useState<GearCatalogItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [gearType, setGearType] = useState<GearType>('other');
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
   const [variant, setVariant] = useState('');
@@ -1695,6 +1700,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         if (cancelled) return;
         
         setItem(freshItem);
+        setGearType(freshItem.gearType);
         setBrand(freshItem.brand);
         setModel(freshItem.model);
         setVariant(freshItem.variant || '');
@@ -2047,6 +2053,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     const params: AdminUpdateGearCatalogParams = {};
 
     // Only include changed fields
+    if (gearType !== item.gearType) params.gearType = gearType;
     if (brand !== item.brand) params.brand = brand;
     if (model !== item.model) params.model = model;
     if (variant !== (item.variant || '')) params.variant = variant;
@@ -2226,7 +2233,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
           {/* Read-only info */}
           <div className="p-3 bg-slate-700/50 rounded-lg">
             <p className="text-sm text-slate-400">
-              <strong>Gear Type:</strong> {item.gearType}
+              <strong>Gear Type:</strong> {getGearTypeLabel(item.gearType)}
             </p>
             <p className="text-sm text-slate-400 mt-1">
               <strong>Upload Date:</strong> {formatDateTime(item.createdAt)}
@@ -2289,6 +2296,25 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
             <p className="text-xs text-slate-500 mt-1">
               Set to <span className="text-blue-400">Scanned</span> to unapprove while keeping the image.
             </p>
+          </div>
+
+          {/* Gear Type */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Gear Type
+            </label>
+            <select
+              value={gearType}
+              onChange={(e) => setGearType(e.target.value as GearType)}
+              aria-label="Gear Type"
+              className="w-full h-11 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            >
+              {GEAR_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Brand & Model */}
