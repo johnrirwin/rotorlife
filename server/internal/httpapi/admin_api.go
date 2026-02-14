@@ -250,18 +250,6 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 		}
 	}
 
-	// Validate ExternalImageURL if provided (imageUrl is a deprecated alias).
-	externalImageURL := params.ExternalImageURL
-	if externalImageURL == nil {
-		externalImageURL = params.ImageURL
-	}
-	if externalImageURL != nil && strings.TrimSpace(*externalImageURL) != "" {
-		if err := validateImageURL(strings.TrimSpace(*externalImageURL)); err != nil {
-			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 

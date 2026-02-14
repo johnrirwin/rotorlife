@@ -347,7 +347,6 @@ function App() {
         selectedEquipmentForInventory.price,
         selectedEquipmentForInventory.seller,
         selectedEquipmentForInventory.productUrl,
-        selectedEquipmentForInventory.imageUrl,
         selectedEquipmentForInventory.keySpecs,
         params.quantity,
         params.notes
