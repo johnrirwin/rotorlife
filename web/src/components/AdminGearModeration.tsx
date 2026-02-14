@@ -1468,7 +1468,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
 
     try {
       const moderation = await moderateGearCatalogImageUpload(file);
-      if (requestId != moderationRequestRef.current) {
+      if (requestId !== moderationRequestRef.current) {
         return;
       }
 
@@ -1491,7 +1491,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
       setImageModalStatusText('Unable to verify right now');
       setImageModalStatusReason(moderation.reason ?? 'Unable to verify image right now');
     } catch (err) {
-      if (requestId != moderationRequestRef.current) {
+      if (requestId !== moderationRequestRef.current) {
         return;
       }
       const message = err instanceof Error ? err.message : 'Unable to verify image right now';
@@ -1501,7 +1501,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
       setImageModalError(message);
       setError(message);
     } finally {
-      if (requestId == moderationRequestRef.current) {
+      if (requestId === moderationRequestRef.current) {
         setIsModeratingImage(false);
       }
     }
@@ -1521,6 +1521,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
 
   const handleCloseImageModal = () => {
     setShowImageModal(false);
+    moderationRequestRef.current += 1;
     if (modalImagePreview?.startsWith('blob:') && modalImagePreview !== imagePreview) {
       URL.revokeObjectURL(modalImagePreview);
     }

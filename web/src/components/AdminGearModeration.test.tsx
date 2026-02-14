@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { render } from '../test/test-utils';
 import { AdminGearModeration } from './AdminGearModeration';
@@ -78,6 +78,11 @@ const mockGetAdminBuildImageUrl = vi.mocked(getAdminBuildImageUrl);
 const mockGetAdminGearImageUrl = vi.mocked(getAdminGearImageUrl);
 const mockModerateGearCatalogImageUpload = vi.mocked(moderateGearCatalogImageUpload);
 
+type ObjectUrlStatics = {
+  createObjectURL?: (obj: Blob) => string;
+  revokeObjectURL?: (url: string) => void;
+};
+
 const mockItem: GearCatalogItem = {
   id: 'gear-1',
   gearType: 'motor',
@@ -105,15 +110,22 @@ const mockItem: GearCatalogItem = {
 };
 
 describe('AdminGearModeration', () => {
+  let hadCreateObjectURL = false;
+  let hadRevokeObjectURL = false;
+  let originalCreateObjectURL: ObjectUrlStatics['createObjectURL'];
+  let originalRevokeObjectURL: ObjectUrlStatics['revokeObjectURL'];
+
   beforeEach(() => {
     vi.clearAllMocks();
     // JSDOM doesn't implement these; gear/build moderation UIs rely on them.
-    if (!URL.createObjectURL) {
-      URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-    }
-    if (!URL.revokeObjectURL) {
-      URL.revokeObjectURL = vi.fn();
-    }
+    // Restore in afterEach to avoid leaking state into other test files.
+    const urlStatics = URL as unknown as ObjectUrlStatics;
+    hadCreateObjectURL = typeof urlStatics.createObjectURL === 'function';
+    hadRevokeObjectURL = typeof urlStatics.revokeObjectURL === 'function';
+    originalCreateObjectURL = urlStatics.createObjectURL;
+    originalRevokeObjectURL = urlStatics.revokeObjectURL;
+    urlStatics.createObjectURL = vi.fn(() => 'blob:mock-url');
+    urlStatics.revokeObjectURL = vi.fn();
 
     mockAdminSearchGear.mockResolvedValue({
       items: [mockItem],
@@ -133,6 +145,21 @@ describe('AdminGearModeration', () => {
     mockGetAdminBuildImageUrl.mockReturnValue('/mock-build-image.png');
     mockGetAdminGearImageUrl.mockReturnValue('/mock-image.png');
     mockModerateGearCatalogImageUpload.mockResolvedValue({ status: 'APPROVED', uploadId: 'upload-1' });
+  });
+
+  afterEach(() => {
+    const urlStatics = URL as unknown as ObjectUrlStatics;
+    if (hadCreateObjectURL) {
+      urlStatics.createObjectURL = originalCreateObjectURL;
+    } else {
+      delete urlStatics.createObjectURL;
+    }
+
+    if (hadRevokeObjectURL) {
+      urlStatics.revokeObjectURL = originalRevokeObjectURL;
+    } else {
+      delete urlStatics.revokeObjectURL;
+    }
   });
 
   it('shows upload and last edit columns and opens modal by clicking a row', async () => {
