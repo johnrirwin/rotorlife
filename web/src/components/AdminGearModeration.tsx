@@ -2233,7 +2233,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
           {/* Read-only info */}
           <div className="p-3 bg-slate-700/50 rounded-lg">
             <p className="text-sm text-slate-400">
-              <strong>Gear Type:</strong> {gearType}
+              <strong>Gear Type:</strong> {getGearTypeLabel(item.gearType)}
             </p>
             <p className="text-sm text-slate-400 mt-1">
               <strong>Upload Date:</strong> {formatDateTime(item.createdAt)}
