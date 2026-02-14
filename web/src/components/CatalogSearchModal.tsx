@@ -18,6 +18,7 @@ interface CatalogSearchModalProps {
   onSelectItem: (item: GearCatalogItem) => void;
   initialGearType?: GearType;
   startInCreateMode?: boolean;
+  enableJsonImport?: boolean;
   onUploadCatalogImage?: (itemId: string, imageFile: File) => Promise<void>;
   onModerateCatalogImage?: (imageFile: File) => Promise<ModerationResult>;
   onSaveCatalogImageUpload?: (itemId: string, uploadId: string) => Promise<void>;
@@ -29,6 +30,7 @@ export function CatalogSearchModal({
   onSelectItem,
   initialGearType,
   startInCreateMode = false,
+  enableJsonImport = false,
   onUploadCatalogImage,
   onModerateCatalogImage,
   onSaveCatalogImageUpload,
@@ -38,7 +40,8 @@ export function CatalogSearchModal({
   const [results, setResults] = useState<GearCatalogItem[]>([]);
   const [popularItems, setPopularItems] = useState<GearCatalogItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(startInCreateMode);
+  type CatalogModalMode = 'search' | 'create' | 'import-json';
+  const [mode, setMode] = useState<CatalogModalMode>(startInCreateMode ? 'create' : 'search');
   const [error, setError] = useState<string | null>(null);
   
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -54,7 +57,7 @@ export function CatalogSearchModal({
   // Reset the starting mode each time the modal opens.
   useEffect(() => {
     if (isOpen) {
-      setShowCreateForm(startInCreateMode);
+      setMode(startInCreateMode ? 'create' : 'search');
     }
   }, [isOpen, startInCreateMode]);
 
@@ -136,12 +139,18 @@ export function CatalogSearchModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <div>
             <h2 className="text-lg font-semibold text-white">
-              {showCreateForm ? 'Add New Gear to Catalog' : 'Search Gear Catalog'}
+              {mode === 'create'
+                ? 'Add New Gear to Catalog'
+                : mode === 'import-json'
+                  ? 'Import Gear from JSON'
+                  : 'Search Gear Catalog'}
             </h2>
             <p className="text-sm text-slate-400 mt-0.5">
-              {showCreateForm 
+              {mode === 'create'
                 ? 'Create a new entry in the shared gear catalog'
-                : 'Search our community gear database'}
+                : mode === 'import-json'
+                  ? 'Upload a JSON file and review items before saving'
+                  : 'Search our community gear database'}
             </p>
           </div>
           <button
@@ -154,15 +163,50 @@ export function CatalogSearchModal({
           </button>
         </div>
 
-        {showCreateForm ? (
+        {(mode === 'create' || mode === 'import-json') && enableJsonImport && (
+          <div className="px-6 py-3 border-b border-slate-700 bg-slate-800/40">
+            <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-1">
+              <button
+                type="button"
+                onClick={() => setMode('create')}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  mode === 'create'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                }`}
+              >
+                Single Item
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('import-json')}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  mode === 'import-json'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                }`}
+              >
+                Import JSON
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'create' ? (
           <CreateCatalogItemForm
             initialGearType={gearType || undefined}
             initialQuery={query}
             onSuccess={handleSelectItem}
-            onCancel={() => setShowCreateForm(false)}
+            onCancel={() => setMode('search')}
             onUploadCatalogImage={onUploadCatalogImage}
             onModerateCatalogImage={onModerateCatalogImage}
             onSaveCatalogImageUpload={onSaveCatalogImageUpload}
+            onImportJson={enableJsonImport ? () => setMode('import-json') : undefined}
+          />
+        ) : mode === 'import-json' ? (
+          <ImportCatalogItemsForm
+            onSuccess={handleSelectItem}
+            onCancel={() => setMode(startInCreateMode ? 'create' : 'search')}
           />
         ) : (
           <>
@@ -243,7 +287,7 @@ export function CatalogSearchModal({
                   </div>
                   <p className="text-slate-400 mb-4">No gear found matching "{query}"</p>
                   <button
-                    onClick={() => setShowCreateForm(true)}
+                    onClick={() => setMode('create')}
                     className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
                   >
                     Add "{query}" to Catalog
@@ -278,7 +322,7 @@ export function CatalogSearchModal({
             {/* Footer */}
             <div className="flex items-center justify-start px-6 py-4 border-t border-slate-700 bg-slate-800/50">
               <button
-                onClick={() => setShowCreateForm(true)}
+                onClick={() => setMode('create')}
                 className="text-primary-400 hover:text-primary-300 text-sm font-medium transition-colors flex items-center gap-1"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -360,6 +404,7 @@ interface CreateCatalogItemFormProps {
   initialQuery?: string;
   onSuccess: (item: GearCatalogItem) => void;
   onCancel: () => void;
+  onImportJson?: () => void;
   onUploadCatalogImage?: (itemId: string, imageFile: File) => Promise<void>;
   onModerateCatalogImage?: (imageFile: File) => Promise<ModerationResult>;
   onSaveCatalogImageUpload?: (itemId: string, uploadId: string) => Promise<void>;
@@ -370,6 +415,7 @@ function CreateCatalogItemForm({
   initialQuery,
   onSuccess,
   onCancel,
+  onImportJson,
   onUploadCatalogImage,
   onModerateCatalogImage,
   onSaveCatalogImageUpload,
@@ -861,18 +907,32 @@ function CreateCatalogItemForm({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50 flex-shrink-0">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-        >
-          Back to Search
-        </button>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50 flex-shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+          >
+            Back to Search
+          </button>
+          {onImportJson && (
+            <button
+              type="button"
+              onClick={onImportJson}
+              className="text-primary-400 hover:text-primary-300 text-sm font-medium transition-colors flex items-center gap-1 justify-center sm:justify-start"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Import from JSON
+            </button>
+          )}
+        </div>
         <button
           type="submit"
           disabled={isSubmitting || !brand.trim() || !model.trim() || checkingDuplicates}
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2 justify-center"
         >
           {isSubmitting || checkingDuplicates ? (
             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -908,6 +968,402 @@ function CreateCatalogItemForm({
         statusReason={modalImage?.moderationReason}
         errorMessage={imageModalError}
       />
+    </form>
+  );
+}
+
+interface ImportCatalogItemsFormProps {
+  onSuccess: (item: GearCatalogItem) => void;
+  onCancel: () => void;
+}
+
+type ImportCatalogRow = {
+  id: string;
+  params: CreateGearCatalogParams;
+  result?: 'created' | 'existing' | 'error';
+  error?: string;
+};
+
+function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [rows, setRows] = useState<ImportCatalogRow[]>([]);
+  const [parseErrors, setParseErrors] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [summary, setSummary] = useState<{ created: number; existing: number; failed: number } | null>(null);
+
+  const createRowId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  };
+
+  const validGearTypes = useRef(new Set(GEAR_TYPES.map((t) => t.value)));
+  const validDroneTypes = useRef(new Set(DRONE_TYPES.map((t) => t.value)));
+
+  const parseFile = useCallback(
+    async (file: File) => {
+      setError(null);
+      setSummary(null);
+      setProgress(null);
+
+      const text = await file.text();
+      let data: unknown;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        throw new Error(err instanceof Error ? err.message : 'Invalid JSON');
+      }
+
+      let items: unknown[] | null = null;
+      if (Array.isArray(data)) {
+        items = data;
+      } else if (data && typeof data === 'object') {
+        const obj = data as Record<string, unknown>;
+        if (Array.isArray(obj.items)) items = obj.items;
+        else if (Array.isArray(obj.catalog)) items = obj.catalog;
+      }
+
+      if (!items) {
+        throw new Error('JSON must be an array of items (or an object with an "items" array)');
+      }
+
+      const nextErrors: string[] = [];
+      const nextRows: ImportCatalogRow[] = [];
+
+      items.forEach((raw, index) => {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+          nextErrors.push(`Row ${index + 1}: expected an object`);
+          return;
+        }
+
+        const item = raw as Record<string, unknown>;
+        const rawGearType = item.gearType;
+        const rawBrand = item.brand;
+        const rawModel = item.model;
+
+        if (typeof rawGearType !== 'string' || !validGearTypes.current.has(rawGearType as GearType)) {
+          nextErrors.push(`Row ${index + 1}: invalid gearType "${String(rawGearType)}"`);
+          return;
+        }
+
+        const brand = typeof rawBrand === 'string' ? rawBrand.trim() : '';
+        const model = typeof rawModel === 'string' ? rawModel.trim() : '';
+        if (!brand) {
+          nextErrors.push(`Row ${index + 1}: brand is required`);
+          return;
+        }
+        if (!model) {
+          nextErrors.push(`Row ${index + 1}: model is required`);
+          return;
+        }
+
+        const variant = typeof item.variant === 'string' ? item.variant.trim() : '';
+        const description = typeof item.description === 'string' ? item.description.trim() : '';
+
+        let msrp: number | undefined;
+        if (typeof item.msrp === 'number' && Number.isFinite(item.msrp)) {
+          msrp = item.msrp;
+        } else if (typeof item.msrp === 'string' && item.msrp.trim()) {
+          const parsed = Number(item.msrp.trim());
+          if (Number.isFinite(parsed)) {
+            msrp = parsed;
+          }
+        }
+
+        let specs: Record<string, unknown> | undefined;
+        if (item.specs && typeof item.specs === 'object' && !Array.isArray(item.specs)) {
+          specs = item.specs as Record<string, unknown>;
+        }
+
+        let bestFor: DroneType[] | undefined;
+        if (Array.isArray(item.bestFor)) {
+          const filtered = item.bestFor.filter(
+            (value): value is DroneType =>
+              typeof value === 'string' && validDroneTypes.current.has(value as DroneType)
+          );
+          if (filtered.length > 0) {
+            bestFor = filtered;
+          }
+        }
+
+        const params: CreateGearCatalogParams = {
+          gearType: rawGearType as GearType,
+          brand,
+          model,
+          variant: variant || undefined,
+          description: description || undefined,
+          msrp,
+          specs,
+          bestFor,
+        };
+
+        nextRows.push({ id: createRowId(), params });
+      });
+
+      setFileName(file.name);
+      setParseErrors(nextErrors);
+      setRows(nextRows);
+    },
+    []
+  );
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Allow choosing the same file again.
+    event.target.value = '';
+    if (!file) return;
+
+    setIsSubmitting(false);
+    setError(null);
+
+    try {
+      await parseFile(file);
+    } catch (err) {
+      setFileName(file.name);
+      setRows([]);
+      setParseErrors([]);
+      setError(err instanceof Error ? err.message : 'Failed to parse JSON file');
+    }
+  };
+
+  const handleDeleteRow = (id: string) => {
+    if (isSubmitting) return;
+    setRows((prev) => prev.filter((row) => row.id !== id));
+  };
+
+  const handleUploadClick = () => {
+    if (isSubmitting) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (rows.length === 0) {
+      setError('Upload a JSON file with at least one valid item');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+    setSummary(null);
+
+    const nextRows: ImportCatalogRow[] = rows.map((row) => ({ ...row, result: undefined, error: undefined }));
+    let created = 0;
+    let existing = 0;
+    let failed = 0;
+    let firstItem: GearCatalogItem | null = null;
+
+    for (let i = 0; i < nextRows.length; i++) {
+      setProgress({ current: i + 1, total: nextRows.length });
+      try {
+        const response = await createGearCatalogItem(nextRows[i].params);
+        if (!firstItem) firstItem = response.item;
+        if (response.existing) {
+          existing += 1;
+          nextRows[i].result = 'existing';
+        } else {
+          created += 1;
+          nextRows[i].result = 'created';
+        }
+      } catch (err) {
+        failed += 1;
+        nextRows[i].result = 'error';
+        nextRows[i].error = err instanceof Error ? err.message : 'Failed to save item';
+      }
+    }
+
+    setRows(nextRows);
+    setProgress(null);
+    setSummary({ created, existing, failed });
+    setIsSubmitting(false);
+
+    if (failed === 0 && firstItem) {
+      onSuccess(firstItem);
+    } else if (failed > 0) {
+      setError(`Saved ${created + existing} item${created + existing === 1 ? '' : 's'} with ${failed} failure${failed === 1 ? '' : 's'}.`);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
+        {error && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-white">Upload JSON file</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Expected fields: <span className="text-slate-300">gearType, brand, model</span>. Optional: variant, specs, bestFor, msrp, description.
+              </p>
+              {fileName && (
+                <p className="text-xs text-slate-500 mt-2 truncate">
+                  File: <span className="text-slate-300">{fileName}</span>
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={handleFileSelected}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={handleUploadClick}
+                disabled={isSubmitting}
+                className="px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Choose File
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {parseErrors.length > 0 && (
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-300 text-sm">
+            <p className="font-medium mb-1">Some rows were skipped:</p>
+            <ul className="list-disc list-inside space-y-1">
+              {parseErrors.slice(0, 8).map((msg, idx) => (
+                <li key={idx}>{msg}</li>
+              ))}
+            </ul>
+            {parseErrors.length > 8 && (
+              <p className="mt-2 text-xs text-yellow-200/80">
+                And {parseErrors.length - 8} more…
+              </p>
+            )}
+          </div>
+        )}
+
+        {summary && (
+          <div className="p-3 bg-slate-700/30 border border-slate-600 rounded-lg text-slate-200 text-sm">
+            Imported results: <span className="text-green-300">{summary.created} created</span>,{' '}
+            <span className="text-blue-300">{summary.existing} existing</span>,{' '}
+            <span className={summary.failed ? 'text-red-300' : 'text-slate-300'}>
+              {summary.failed} failed
+            </span>
+            .
+          </div>
+        )}
+
+        {progress && (
+          <div className="flex items-center gap-3 text-sm text-slate-300">
+            <div className="w-4 h-4 border-2 border-slate-500/40 border-t-primary-500 rounded-full animate-spin" />
+            Saving {progress.current} / {progress.total}…
+          </div>
+        )}
+
+        <div>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-slate-300">
+              Review Items ({rows.length})
+            </h3>
+            {rows.length > 0 && (
+              <p className="text-xs text-slate-500">Delete any rows you don’t want to import.</p>
+            )}
+          </div>
+
+          {rows.length === 0 ? (
+            <div className="p-6 text-center text-slate-400 border border-slate-700 bg-slate-900/40 rounded-xl">
+              Upload a JSON file to preview items here.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {rows.map((row) => (
+                <div
+                  key={row.id}
+                  className={`p-3 rounded-lg border bg-slate-700/30 flex items-start justify-between gap-3 ${
+                    row.result === 'error'
+                      ? 'border-red-500/40'
+                      : row.result === 'created'
+                        ? 'border-green-500/30'
+                        : row.result === 'existing'
+                          ? 'border-blue-500/30'
+                          : 'border-slate-600'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="text-white font-medium truncate">
+                      {row.params.brand} {row.params.model}
+                      {row.params.variant ? ` ${row.params.variant}` : ''}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      <span className="px-2 py-0.5 bg-slate-600/60 text-slate-200 rounded text-[11px]">
+                        {row.params.gearType}
+                      </span>
+                      {row.params.bestFor && row.params.bestFor.length > 0 && (
+                        <span className="ml-2 text-slate-500">
+                          • bestFor: {row.params.bestFor.join(', ')}
+                        </span>
+                      )}
+                      {typeof row.params.msrp === 'number' && (
+                        <span className="ml-2 text-slate-500">• MSRP: ${row.params.msrp}</span>
+                      )}
+                    </p>
+
+                    {row.result === 'created' && (
+                      <p className="mt-1 text-xs text-green-300">Created</p>
+                    )}
+                    {row.result === 'existing' && (
+                      <p className="mt-1 text-xs text-blue-300">Already exists</p>
+                    )}
+                    {row.result === 'error' && row.error && (
+                      <p className="mt-1 text-xs text-red-300">Error: {row.error}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteRow(row.id)}
+                    disabled={isSubmitting}
+                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label={`Remove ${row.params.brand} ${row.params.model}`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50 flex-shrink-0">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Back
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting || rows.length === 0}
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2 justify-center"
+        >
+          {isSubmitting ? (
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          )}
+          Save {rows.length} Item{rows.length === 1 ? '' : 's'}
+        </button>
+      </div>
     </form>
   );
 }

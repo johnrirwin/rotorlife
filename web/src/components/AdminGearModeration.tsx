@@ -933,6 +933,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
         onClose={handleAddGearClose}
         onSelectItem={handleAddGearSelect}
         startInCreateMode
+        enableJsonImport
         onModerateCatalogImage={moderateGearCatalogImageUpload}
         onSaveCatalogImageUpload={adminSaveGearImageUpload}
       />
