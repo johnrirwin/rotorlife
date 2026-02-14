@@ -108,6 +108,8 @@ type AdminBulkDeleteGearResponse = {
   notFoundCount: number;
 };
 
+const MAX_BULK_DELETE_IDS = 500;
+
 export async function adminBulkDeleteGear(ids: string[]): Promise<AdminBulkDeleteGearResponse> {
   const token = getAuthToken();
   if (!token) {
@@ -117,24 +119,54 @@ export async function adminBulkDeleteGear(ids: string[]): Promise<AdminBulkDelet
     throw new Error('ids is required');
   }
 
-  const response = await fetch(`${API_BASE}/gear/bulk-delete`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ ids }),
-  });
+  const uniqueIds = Array.from(new Set(ids));
 
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: 'Request failed' }));
-    if (response.status === 403) {
-      throw new Error('Admin or content-admin access required');
+  const deleteChunk = async (chunkIds: string[]): Promise<AdminBulkDeleteGearResponse> => {
+    const response = await fetch(`${API_BASE}/gear/bulk-delete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ ids: chunkIds }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: 'Request failed' }));
+      if (response.status === 403) {
+        throw new Error('Admin or content-admin access required');
+      }
+      throw new Error(data.error || 'Failed to delete gear items');
     }
-    throw new Error(data.error || 'Failed to delete gear items');
+
+    return response.json();
+  };
+
+  if (uniqueIds.length <= MAX_BULK_DELETE_IDS) {
+    return deleteChunk(uniqueIds);
   }
 
-  return response.json();
+  // Server enforces a max IDs per request; chunk large deletes into batches.
+  const deletedIdSet = new Set<string>();
+  const notFoundIdSet = new Set<string>();
+
+  for (let offset = 0; offset < uniqueIds.length; offset += MAX_BULK_DELETE_IDS) {
+    const chunk = uniqueIds.slice(offset, offset + MAX_BULK_DELETE_IDS);
+    // eslint-disable-next-line no-await-in-loop
+    const result = await deleteChunk(chunk);
+    (result.deletedIds ?? []).forEach((id) => deletedIdSet.add(id));
+    (result.notFoundIds ?? []).forEach((id) => notFoundIdSet.add(id));
+  }
+
+  const deletedIds = Array.from(deletedIdSet);
+  const notFoundIds = Array.from(notFoundIdSet);
+
+  return {
+    deletedIds,
+    deletedCount: deletedIds.length,
+    notFoundIds,
+    notFoundCount: notFoundIds.length,
+  };
 }
 
 // Get a single gear item by ID
