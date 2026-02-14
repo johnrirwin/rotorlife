@@ -228,15 +228,15 @@ type CreateGearCatalogParams struct {
 
 // AdminUpdateGearCatalogParams represents admin-only update parameters
 type AdminUpdateGearCatalogParams struct {
-	Brand            *string            `json:"brand,omitempty"`
-	Model            *string            `json:"model,omitempty"`
-	Variant          *string            `json:"variant,omitempty"`
-	Description      *string            `json:"description,omitempty"`
-	MSRP             *float64           `json:"msrp,omitempty"`
-	ClearMSRP        bool               `json:"clearMsrp,omitempty"`        // Explicitly clear MSRP when true
-	ImageStatus      *ImageStatus       `json:"imageStatus,omitempty"`
-	BestFor          []string           `json:"bestFor,omitempty"` // Drone types this gear is best suited for
-	Status           *CatalogItemStatus `json:"status,omitempty"`
+	Brand       *string            `json:"brand,omitempty"`
+	Model       *string            `json:"model,omitempty"`
+	Variant     *string            `json:"variant,omitempty"`
+	Description *string            `json:"description,omitempty"`
+	MSRP        *float64           `json:"msrp,omitempty"`
+	ClearMSRP   bool               `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
+	ImageStatus *ImageStatus       `json:"imageStatus,omitempty"`
+	BestFor     []string           `json:"bestFor,omitempty"` // Drone types this gear is best suited for
+	Status      *CatalogItemStatus `json:"status,omitempty"`
 }
 
 // AdminGearSearchParams represents admin search parameters with curation filters
